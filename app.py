@@ -43,54 +43,51 @@ st.markdown(
         backdrop-filter: blur(10px) !important;
     }
     #weekly-dashboard-anchor {height: 0; overflow: hidden;}
-    .filter-label {
-        font-size: 0.78rem;
-        line-height: 1.2;
-        color: #344054;
-        font-weight: 500;
-        margin: 0 0 0.38rem 0.05rem;
-        height: 18px;
-        display: flex;
-        align-items: center;
-    }
-    /* Project + Activity use Streamlit popovers. The popover itself has
-       Streamlit's built-in vertical spacing, so move the actual control
-       upward to the same baseline as Month / Year / Week. */
-    .filter-popover-wrap {
-        width: 100% !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    div[data-testid="stPopover"] {
-        width: 100% !important;
-        position: relative !important;
-        top: -14px !important;
-        margin-bottom: -14px !important;
-    }
-    div[data-testid="stPopover"] > button {
-        margin-top: 0 !important;
-    }
-    .filter-popover-wrap button {
-        width: 100% !important;
-        height: 50px !important;
-        min-height: 50px !important;
-        border-radius: 10px !important;
-        border: 1px solid #D0D5DD !important;
-        background: #FFFFFF !important;
-        color: #344054 !important;
-        font-size: 0.9rem !important;
-        font-weight: 400 !important;
-        justify-content: center !important;
-        padding: 0 14px !important;
-    }
-    .filter-popover-wrap button:hover {
-        border-color: #98A2B3 !important;
-        background: #FCFCFD !important;
-    }
-    .filter-popover-wrap button:focus {
-        box-shadow: 0 0 0 2px rgba(20,121,233,.12) !important;
-    }
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
+
+    /* Filter bar — intentionally compact and visually consistent with the mockup. */
+    div[data-testid="stHorizontalBlock"] .stSelectbox > label,
+    div[data-testid="stHorizontalBlock"] .stPopover > button + div {font-weight:600;}
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div,
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        min-height:42px !important;
+        border-radius:9px !important;
+        border:1px solid #E2E8F0 !important;
+        background:#F5F8FC !important;
+        box-shadow:none !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
+    div[data-testid="stHorizontalBlock"] .stPopover > button:hover {
+        border-color:#B8C7DA !important;
+        background:#F0F5FA !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] > div {
+        min-height:42px !important;
+        border:0 !important;
+        background:transparent !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        width:100% !important;
+        min-height:42px !important;
+        justify-content:flex-start !important;
+        color:#172B4D !important;
+        font-weight:600 !important;
+        padding:0 .8rem !important;
+        border-radius:9px !important;
+        border:1px solid #E2E8F0 !important;
+        background:#F5F8FC !important;
+        box-shadow:none !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stPopover > button p {
+        font-size:.83rem !important;
+        font-weight:600 !important;
+        color:#172B4D !important;
+    }
+    .filter-label {
+        font-size:.74rem; font-weight:700; color:#475467;
+        margin:0 0 .28rem .05rem; letter-spacing:.02em;
+    }
+    .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
     .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
@@ -171,28 +168,14 @@ st.markdown(
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .kpi-row {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:8px 0 12px;}
-    .kpi {position:relative;min-height:126px;padding:20px 22px;border:1px solid rgba(16,24,40,.06);border-radius:15px;overflow:hidden;box-shadow:0 3px 12px rgba(16,24,40,.05);display:flex;align-items:center;gap:18px;}
-    .kpi::after {content:"";position:absolute;width:150px;height:150px;right:-42px;bottom:-82px;border-radius:50%;background:rgba(255,255,255,.38);}
-    .kpi::before {content:"";position:absolute;width:92px;height:92px;right:-24px;top:-35px;border-radius:50%;background:rgba(255,255,255,.25);}
-    .kpi.work {background:linear-gradient(135deg,#EAF4FF,#DCEEFF);}
-    .kpi.meeting {background:linear-gradient(135deg,#FFF9DF,#FFF1B9);}
-    .kpi.submission {background:linear-gradient(135deg,#FFF0F1,#FFE0E3);}
-    .kpi.other {background:linear-gradient(135deg,#F4ECFF,#E9DDFF);}
-    .kpi-icon {width:54px;height:54px;min-width:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;z-index:2;}
-    .kpi.work .kpi-icon {background:#1479E9;color:#fff;}
-    .kpi.meeting .kpi-icon {background:#F5B400;color:#fff;}
-    .kpi.submission .kpi-icon {background:#EF4444;color:#fff;}
-    .kpi.other .kpi-icon {background:#8B5CF6;color:#fff;}
-    .kpi-content {position:relative;z-index:2;}
-    .kpi-label {font-size:.76rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;margin-bottom:4px;}
-    .kpi.work .kpi-label {color:#1479E9;}
-    .kpi.meeting .kpi-label {color:#C88A00;}
-    .kpi.submission .kpi-label {color:#E33A40;}
-    .kpi.other .kpi-label {color:#7040D8;}
-    .kpi-value {font-size:2rem;line-height:1;font-weight:850;color:#102A56;}
-    @media (max-width:900px){.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
-    @media (max-width:560px){.kpi-row{grid-template-columns:1fr;}}
+    .kpi {
+        padding: 0.8rem 1rem;
+        border: 1px solid #EAECF0;
+        border-radius: 10px;
+        background: white;
+    }
+    .kpi-label {font-size:.72rem;color:#667085;text-transform:uppercase;}
+    .kpi-value {font-size:1.35rem;font-weight:750;color:#101828;}
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
     </style>
     """,
@@ -803,8 +786,10 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
 
 def checklist_filter(label, options, all_label, key_prefix, format_func=None):
-    """Popover checklist with the same two-row geometry as the dropdown filters:
-    label on top, control box below. All hides individual choices.
+    """Popover-based multi-select filter.
+
+    UX rule: All is mutually exclusive. While All is active, individual
+    choices are hidden. Clearing All reveals the individual checkboxes.
     """
     all_key = f"{key_prefix}_all"
     if all_key not in st.session_state:
@@ -815,49 +800,35 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
         if key not in st.session_state:
             st.session_state[key] = False
 
-    # Keep the label outside the popover so Project/Activity align exactly
-    # with Month/Year/Week labels and controls.
-    st.markdown(f'<div class="filter-label">{html.escape(label)}</div>', unsafe_allow_html=True)
-
-    all_selected = st.session_state[all_key]
-    selected = []
-
-    with st.container():
-        if all_selected:
-            # Button text is intentionally simple and centred like the baseline.
-            button_text = all_label
-        else:
-            active = [
-                (format_func(opt) if format_func else opt)
-                for opt in options
-                if st.session_state[f"{key_prefix}_{opt}"]
-            ]
-            if not active:
-                button_text = "Select..."
-            elif len(active) == 1:
-                button_text = active[0]
-            else:
-                button_text = f"{len(active)} selected"
-
-        with st.popover(button_text, use_container_width=True):
-            all_selected = st.checkbox(all_label, key=all_key)
-
-            if not all_selected:
-                for opt in options:
-                    key = f"{key_prefix}_{opt}"
-                    text = format_func(opt) if format_func else opt
-                    if st.checkbox(text, key=key):
-                        selected.append(opt)
-
-
-    # If user activates All, clear individual choices so the next opening
-    # of the popover contains only All, matching the approved UX.
+    # If all is selected, clear individual selections so the state is clean.
     if st.session_state[all_key]:
         for opt in options:
             st.session_state[f"{key_prefix}_{opt}"] = False
-        return list(options), True
 
-    return selected, False
+    chosen = [opt for opt in options if st.session_state[f"{key_prefix}_{opt}"]]
+    if st.session_state[all_key]:
+        summary = all_label
+    elif not chosen:
+        summary = "None"
+    elif len(chosen) == 1:
+        summary = format_func(chosen[0]) if format_func else chosen[0]
+    else:
+        summary = f"{len(chosen)} selected"
+
+    # Keep the label outside the control so Project/Activity align vertically
+    # with the native Month/Year/Week selectboxes.
+    st.markdown(f'<div class="filter-label">{html.escape(label)}</div>', unsafe_allow_html=True)
+    with st.popover(summary, use_container_width=True):
+        all_selected = st.checkbox(all_label, key=all_key)
+        if all_selected:
+            st.caption("All selected")
+        else:
+            for opt in options:
+                text = format_func(opt) if format_func else opt
+                st.checkbox(text, key=f"{key_prefix}_{opt}")
+
+    selected = [opt for opt in options if st.session_state[f"{key_prefix}_{opt}"]]
+    return (list(options), True) if st.session_state[all_key] else (selected, False)
 
 
 def weekly_dashboard():
@@ -904,22 +875,23 @@ def weekly_dashboard():
             unsafe_allow_html=True,
         )
 
-        c1, c2, c3, c4, c5 = st.columns([1.0, .8, 1.55, 1.05, 1.1])
+        c1, c2, c3, c4, c5 = st.columns([1.05, .82, 1.55, 1.15, 1.15], gap="small")
         with c1:
             selected_month_no = st.selectbox(
                 "MONTH", range(1, 13), index=date.today().month - 1,
-                format_func=lambda x: month_names[x - 1], key="dash_month"
+                format_func=lambda x: f"📅  {month_names[x - 1]}", key="dash_month"
             )
         with c2:
             default_year_index = years.index(date.today().year) if date.today().year in years else len(years) - 1
-            selected_year = st.selectbox("YEAR", years, index=default_year_index, key="dash_year")
+            selected_year = st.selectbox("YEAR", years, index=default_year_index,
+                                         format_func=lambda x: f"📅  {x}", key="dash_year")
 
         selected_month = date(selected_year, selected_month_no, 1)
         weeks = month_weeks(selected_month.year, selected_month.month)
 
         with c3:
             selected_projects, project_all = checklist_filter(
-                "PROJECT",
+                "📁 PROJECT",
                 projects["id"].tolist() if not projects.empty else [],
                 "All Projects",
                 "dash_project",
@@ -936,7 +908,7 @@ def weekly_dashboard():
             selected_week = st.selectbox("WEEK", week_options, key="dash_week")
         with c5:
             selected_activity, activity_all = checklist_filter(
-                "ACTIVITY",
+                "▱ ACTIVITY",
                 ["Work", "Meeting", "Other"],
                 "All",
                 "dash_activity",
@@ -963,28 +935,20 @@ def weekly_dashboard():
             meetings = meetings[meetings["project_id"].isin(selected_projects)].copy()
             # Other intentionally remains independent of project filter.
 
-        # KPI strip — visual only; filter logic above remains unchanged.
-        work_count = len(work) if "work" in visible_activities else 0
-        meeting_count = len(meetings) if "meeting" in visible_activities else 0
-        submission_count = int((work["activity_type"].str.lower() == "submission").sum()) if "work" in visible_activities and not work.empty else 0
-        other_count = len(others) if "other" in visible_activities else 0
-
-        icon_work = '''<svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M15 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>'''
-        icon_meeting = '''<svg width="31" height="31" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="4"/><circle cx="17" cy="9" r="3"/><path d="M2.5 21c.3-4 2.6-6 6.5-6s6.2 2 6.5 6z"/><path d="M14.5 15.5c3.2.1 5 1.8 5.5 4.5h-4.2c-.2-1.7-.6-3.1-1.3-4.5z"/></svg>'''
-        icon_submission = '''<svg width="31" height="31" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="6" r="1.2" fill="currentColor"/><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="5" cy="18" r="1.2" fill="currentColor"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>'''
-        icon_other = '''<svg width="31" height="31" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r="1.25" fill="white"/><circle cx="12" cy="12" r="1.25" fill="white"/><circle cx="16" cy="12" r="1.25" fill="white"/></svg>'''
-
-        cards = [
-            ("work", "WORK ITEMS", work_count, icon_work),
-            ("meeting", "MEETINGS", meeting_count, icon_meeting),
-            ("submission", "SUBMISSIONS", submission_count, icon_submission),
-            ("other", "OTHER ACTIVITIES", other_count, icon_other),
+        # KPI strip reflects the visible activity filter.
+        k = st.columns(4)
+        kpi_values = [
+            ("WORK ITEMS", len(work) if "work" in visible_activities else 0),
+            ("MEETINGS", len(meetings) if "meeting" in visible_activities else 0),
+            ("SUBMISSIONS", int((work["activity_type"].str.lower() == "submission").sum()) if "work" in visible_activities and not work.empty else 0),
+            ("OTHER ACTIVITIES", len(others) if "other" in visible_activities else 0),
         ]
-        cards_html = '<div class="kpi-row">'
-        for css_class, label, value, icon in cards:
-            cards_html += f'<div class="kpi {css_class}"><div class="kpi-icon">{icon}</div><div class="kpi-content"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div></div>'
-        cards_html += '</div>'
-        st.markdown(cards_html, unsafe_allow_html=True)
+        for col, (label, value) in zip(k, kpi_values):
+            with col:
+                st.markdown(
+                    f'<div class="kpi"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>',
+                    unsafe_allow_html=True,
+                )
     selected_weeks = list(enumerate(weeks, start=1))
     if selected_week != "All":
         idx = int(selected_week.split()[1])
