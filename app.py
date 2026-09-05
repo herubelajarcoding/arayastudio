@@ -103,6 +103,23 @@ st.markdown(
     .filter-label {
         font-size:.74rem; font-weight:700; color:#475467;
         margin:0 0 .28rem .05rem; letter-spacing:.02em;
+        height:1.18rem !important;
+        line-height:1.18rem !important;
+        display:flex !important;
+        align-items:flex-start !important;
+    }
+    /* Keep native selectboxes and checklist popovers on exactly the same
+       vertical baseline. */
+    div[data-testid="stHorizontalBlock"] .stSelectbox > label {
+        min-height:1.18rem !important;
+        margin-bottom:.28rem !important;
+        line-height:1.18rem !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div,
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        height:42px !important;
+        min-height:42px !important;
+        box-sizing:border-box !important;
     }
     .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
