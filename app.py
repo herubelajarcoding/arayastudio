@@ -208,7 +208,10 @@ st.markdown(
     .empty {color:#98A2B3; font-size:.72rem;}
     .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
     .detail-date {font-size:1rem; font-weight:700; color:#344054; margin:-.25rem 0 1rem;}
-    .detail-card {border:1px solid #D0D5DD; border-radius:14px; padding:1rem; min-height:360px; box-shadow:0 3px 10px rgba(16,24,40,.05);}
+    .detail-card-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; align-items:start;}
+    .detail-card-column {min-width:0;}
+    .detail-card {box-sizing:border-box; width:100%; border:1px solid #D0D5DD; border-radius:14px; padding:1rem; min-height:360px; box-shadow:0 3px 10px rgba(16,24,40,.05); overflow:hidden;}
+
     .detail-work {background:#F3F8FF; border-color:#B9D6F8;}
     .detail-meeting {background:#FFF9E8; border-color:#F3D98A;}
     .detail-other {background:#F7F0FF; border-color:#D8C0F5;}
@@ -222,7 +225,7 @@ st.markdown(
     .priority-tag {display:inline-block; font-size:.65rem; font-weight:800; letter-spacing:.03em; border-radius:999px; padding:.12rem .38rem; margin-left:.35rem; vertical-align:middle;}
     .priority-high {color:#B42318; background:#FEE4E2;}
     .priority-medium {color:#9A6700; background:#FFF0C2;}
-    .priority-low {color:#175CD3; background:#D1E9FF;}
+    .priority-low {color:#175CD3; background:#D1E9FF;} .priority-none {color:#667085; background:#F2F4F7;}
     .detail-meta {font-size:.73rem; line-height:1.4; color:#667085; margin-left:1.05rem;}
     .detail-meeting-item, .detail-other-item {margin:.45rem 0 .8rem; padding-bottom:.6rem; border-bottom:1px dashed rgba(16,24,40,.12);}
     .detail-empty {color:#98A2B3; font-size:.78rem; padding:1.5rem .25rem;}
@@ -1081,15 +1084,15 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
 
 @st.dialog("Activity Detail", width="large")
 def show_date_detail(detail_date, work, meetings, others, visible_activities):
-    """Full-detail modal for one date. No dashboard display limits."""
+    """Full-detail modal for one date. No dashboard display limits.
+
+    The three activity cards are each emitted as one HTML block so all
+    activity content stays physically inside its coloured card.
+    """
     st.markdown(
         f'<div class="detail-date">{detail_date.strftime("%A, %d %B %Y")}</div>',
         unsafe_allow_html=True,
     )
-
-    # Always keep the three activity columns in place. If a category has no
-    # activity, its card remains as an empty coloured column.
-    c_work, c_meeting, c_other = st.columns(3, gap="medium")
 
     def priority_class(value):
         p = clean(value).lower()
@@ -1097,28 +1100,33 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
             return "priority-high"
         if p == "low":
             return "priority-low"
-        return "priority-medium"
+        if p == "medium":
+            return "priority-medium"
+        return "priority-none"
 
-    with c_work:
-        st.markdown(
-            '<div class="detail-card detail-work">'
+    def work_card_html():
+        html_parts = [
+            '<div class="detail-card detail-work">',
             '<div class="detail-card-head"><span class="detail-card-icon">▣</span> WORK</div>',
-            unsafe_allow_html=True,
+        ]
+
+        wrows = (
+            work[work["end_date"] == detail_date.isoformat()].copy()
+            if not work.empty else work.iloc[0:0]
         )
 
-        wrows = work[work["end_date"] == detail_date.isoformat()].copy() if not work.empty else work.iloc[0:0]
-
-        if not wrows.empty:
+        if wrows.empty:
+            html_parts.append('<div class="detail-empty">No work activity.</div>')
+        else:
             groups = {}
             for _, row in wrows.iterrows():
                 groups.setdefault(clean(row.get("project_id")), []).append(row)
 
             for pid, rows in sorted(groups.items(), key=lambda x: (x[0] == "", x[0])):
                 pname = clean(rows[0].get("project_name"))
-                st.markdown(
+                html_parts.append(
                     f'<div class="detail-project">{html.escape(pid)} | '
-                    f'{html.escape(pname)}</div>',
-                    unsafe_allow_html=True,
+                    f'{html.escape(pname)}</div>'
                 )
 
                 rows = sorted(
@@ -1138,30 +1146,38 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
 
                     sign = '<span class="detail-submit">!!</span>' if activity_type == "submission" else ""
                     pic_html = f'<span class="detail-pic">({pic.upper()})</span>' if pic else ""
-                    pclass = priority_class(priority)
 
-                    st.markdown(
+                    priority_html = ""
+                    if priority:
+                        priority_html = (
+                            f'<span class="priority-tag {priority_class(priority)}">'
+                            f'{html.escape(priority.upper())}</span>'
+                        )
+
+                    html_parts.append(
                         f'<div class="detail-task">'
-                        f'<span class="detail-bullet">•</span> {task} {pic_html} {sign}'
-                        f'<span class="priority-tag {pclass}">{html.escape(priority.upper() or "—")}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
+                        f'<span class="detail-bullet">•</span> {task} {pic_html}'
+                        f' {priority_html} {sign}'
+                        f'</div>'
                     )
-        else:
-            st.markdown('<div class="detail-empty">No work activity.</div>', unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        html_parts.append("</div>")
+        return "".join(html_parts)
 
-    with c_meeting:
-        st.markdown(
-            '<div class="detail-card detail-meeting">'
+    def meeting_card_html():
+        html_parts = [
+            '<div class="detail-card detail-meeting">',
             '<div class="detail-card-head"><span class="detail-card-icon">●</span> MEETINGS</div>',
-            unsafe_allow_html=True,
+        ]
+
+        mrows = (
+            meetings[meetings["activity_date"] == detail_date.isoformat()].copy()
+            if not meetings.empty else meetings.iloc[0:0]
         )
 
-        mrows = meetings[meetings["activity_date"] == detail_date.isoformat()].copy() if not meetings.empty else meetings.iloc[0:0]
-
-        if not mrows.empty:
+        if mrows.empty:
+            html_parts.append('<div class="detail-empty">No meeting activity.</div>')
+        else:
             groups = {}
             for _, row in mrows.iterrows():
                 groups.setdefault(clean(row.get("project_id")), []).append(row)
@@ -1169,10 +1185,9 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
             for pid, rows in sorted(groups.items(), key=lambda x: (x[0] == "", x[0])):
                 if pid:
                     pname = clean(rows[0].get("project_name"))
-                    st.markdown(
+                    html_parts.append(
                         f'<div class="detail-project">{html.escape(pid)} | '
-                        f'{html.escape(pname)}</div>',
-                        unsafe_allow_html=True,
+                        f'{html.escape(pname)}</div>'
                     )
 
                 rows = sorted(
@@ -1193,7 +1208,7 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
                     ]
                     attendees = ", ".join(a.upper() for a in attendees if a)
 
-                    st.markdown(
+                    html_parts.append(
                         f'<div class="detail-meeting-item">'
                         f'<div class="detail-task"><span class="detail-bullet">•</span> '
                         f'{html.escape(clean(row.get("meeting_type")))}</div>'
@@ -1203,26 +1218,27 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
                         f'{html.escape(clean(row.get("end_time")))}</div>'
                         f'<div class="detail-meta"><b>Location:</b> '
                         f'{html.escape(clean(row.get("location")))}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
+                        f'</div>'
                     )
-        else:
-            st.markdown('<div class="detail-empty">No meeting activity.</div>', unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        html_parts.append("</div>")
+        return "".join(html_parts)
 
-    with c_other:
-        st.markdown(
-            '<div class="detail-card detail-other">'
+    def other_card_html():
+        html_parts = [
+            '<div class="detail-card detail-other">',
             '<div class="detail-card-head"><span class="detail-card-icon">•••</span> OTHER ACTIVITIES</div>',
-            unsafe_allow_html=True,
+        ]
+
+        orows = (
+            others[others["activity_date"] == detail_date.isoformat()].copy()
+            if not others.empty else others.iloc[0:0]
         )
 
-        # Always keep this as a DataFrame so .empty is safe.
-        orows = others[others["activity_date"] == detail_date.isoformat()].copy() if not others.empty else others.iloc[0:0]
-
-        if not orows.empty:
-            orows = sorted(
+        if orows.empty:
+            html_parts.append('<div class="detail-empty">No other activity.</div>')
+        else:
+            rows = sorted(
                 [row for _, row in orows.iterrows()],
                 key=lambda r: (
                     clean(r.get("activity")).lower(),
@@ -1231,25 +1247,58 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
                 ),
             )
 
-            for row in orows:
+            for row in rows:
                 activity = html.escape(clean(row.get("activity")))
                 staff = html.escape(clean(row.get("related_staff")))
 
-                st.markdown(
+                html_parts.append(
                     f'<div class="detail-other-item">'
                     f'<div class="detail-task"><span class="detail-bullet">•</span> {activity}</div>'
                     + (
                         f'<div class="detail-meta"><b>Related Staff:</b> {staff.upper()}</div>'
                         if staff else ""
                     )
-                    + '</div>',
-                    unsafe_allow_html=True,
+                    + '</div>'
                 )
-        else:
-            st.markdown('<div class="detail-empty">No other activity.</div>', unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        html_parts.append("</div>")
+        return "".join(html_parts)
 
+    cards = []
+    if "work" in visible_activities:
+        cards.append(work_card_html())
+    else:
+        cards.append(
+            '<div class="detail-card detail-work">'
+            '<div class="detail-card-head"><span class="detail-card-icon">▣</span> WORK</div>'
+            '<div class="detail-empty">Hidden by Activity filter.</div></div>'
+        )
+
+    if "meeting" in visible_activities:
+        cards.append(meeting_card_html())
+    else:
+        cards.append(
+            '<div class="detail-card detail-meeting">'
+            '<div class="detail-card-head"><span class="detail-card-icon">●</span> MEETINGS</div>'
+            '<div class="detail-empty">Hidden by Activity filter.</div></div>'
+        )
+
+    if "other" in visible_activities:
+        cards.append(other_card_html())
+    else:
+        cards.append(
+            '<div class="detail-card detail-other">'
+            '<div class="detail-card-head"><span class="detail-card-icon">•••</span> OTHER ACTIVITIES</div>'
+            '<div class="detail-empty">Hidden by Activity filter.</div></div>'
+        )
+
+    # One HTML wrapper keeps each card's entire content inside its coloured box.
+    st.markdown(
+        '<div class="detail-card-grid">'
+        + "".join(f'<div class="detail-card-column">{card}</div>' for card in cards)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def weekly_dashboard():
