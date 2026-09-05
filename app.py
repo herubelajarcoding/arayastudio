@@ -225,7 +225,23 @@ st.markdown(
     .empty {color:#98A2B3; font-size:.72rem;}
     .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
     .detail-date {font-size:1rem; font-weight:700; color:#344054; margin:-.25rem 0 1rem;}
-    .detail-card-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; align-items:start;}
+        .detail-submission {
+        background:#FEE4E2 !important;
+        color:#B42318 !important;
+        border-radius:8px !important;
+        padding:.32rem .45rem !important;
+        margin:.38rem 0 !important;
+        font-weight:600 !important;
+    }
+    .detail-submission .detail-pic {
+        color:#B42318 !important;
+    }
+    .detail-submit-badge {
+        color:#B42318 !important;
+        font-weight:800 !important;
+        margin-left:.2rem !important;
+    }
+.detail-card-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; align-items:start;}
     .detail-card-column {min-width:0;}
     .detail-card {box-sizing:border-box; width:100%; border:1px solid #D0D5DD; border-radius:14px; padding:1rem; min-height:360px; box-shadow:0 3px 10px rgba(16,24,40,.05); overflow:hidden;}
 
@@ -1171,12 +1187,21 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
                             f'{html.escape(priority.upper())}</span>'
                         )
 
-                    html_parts.append(
-                        f'<div class="detail-task">'
-                        f'<span class="detail-bullet">•</span> {task} {pic_html}'
-                        f' {priority_html} {sign}'
-                        f'</div>'
-                    )
+                    if activity_type == "submission":
+                        html_parts.append(
+                            f'<div class="detail-task detail-submission">'
+                            f'<span class="detail-bullet">•</span> {task} {pic_html}'
+                            f' {priority_html} '
+                            f'<span class="detail-submit-badge">!!</span>'
+                            f'</div>'
+                        )
+                    else:
+                        html_parts.append(
+                            f'<div class="detail-task">'
+                            f'<span class="detail-bullet">•</span> {task} {pic_html}'
+                            f' {priority_html}'
+                            f'</div>'
+                        )
 
         html_parts.append("</div>")
         return "".join(html_parts)
