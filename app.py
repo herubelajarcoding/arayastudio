@@ -57,24 +57,6 @@ st.markdown(
         margin:0 !important;
         padding:0 !important;
     }
-
-    /* V2f: fixed dashboard header experiment */
-    body.araya-freeze-active div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor) {
-        position:fixed !important;
-        top:0 !important;
-        left:0 !important;
-        right:0 !important;
-        width:auto !important;
-        z-index:99999 !important;
-        background:rgba(255,255,255,.985) !important;
-        padding:.15rem max(1rem, 4vw) .85rem !important;
-        border-bottom:1px solid #D0D5DD !important;
-        box-shadow:0 6px 18px rgba(16,24,40,.09) !important;
-        backdrop-filter:blur(10px) !important;
-    }
-    body.araya-freeze-active #weekly-dashboard-fixed-start {
-        display:block !important;
-    }
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
     /* Keep the frozen block visually attached to the viewport top. */
     div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor)
@@ -224,6 +206,7 @@ st.markdown(
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
+    .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
     /* KPI cards — visual enhancement only; filter/dashboard layout remains unchanged. */
     .kpi-row {
         display:grid;
@@ -310,39 +293,6 @@ st.markdown(
     }
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
     </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# V2f freeze-pane experiment: promote the complete dashboard header to a
-# fixed layer only after its anchor reaches the top of the viewport.
-st.markdown(
-    """
-    <script>
-    (function () {
-      const activate = () => {
-        document.body.classList.add('araya-freeze-active');
-        const a = document.getElementById('weekly-dashboard-anchor');
-        if (a) a.style.display = 'block';
-      };
-      const findAnchor = () => {
-        const a = document.getElementById('weekly-dashboard-anchor');
-        if (!a) return false;
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting && entry.boundingClientRect.top <= 5) activate();
-            else if (entry.isIntersecting) document.body.classList.remove('araya-freeze-active');
-          });
-        }, {threshold:[0]});
-        io.observe(a);
-        return true;
-      };
-      let tries = 0;
-      const timer = setInterval(() => {
-        if (findAnchor() || ++tries > 20) clearInterval(timer);
-      }, 250);
-    })();
-    </script>
     """,
     unsafe_allow_html=True,
 )
@@ -797,34 +747,66 @@ def group_items(df, date_col, project_col="project_id"):
     return groups
 
 
+def priority_rank(value):
+    p = clean(value).lower()
+    return {"high": 1, "medium": 2, "low": 3}.get(p, 99)
+
+
 def render_work_cell(rows):
     if not rows:
         return '<div class="empty">—</div>'
 
-    chunks = []
-    last_project = None
-
+    project_groups = {}
     for row in rows:
         pid = clean(row.get("project_id"))
-        pname = clean(row.get("project_name"))
-        if pid != last_project:
-            if pid:
-                project_class = "project project-start" if last_project is not None else "project"
-                chunks.append(
-                    f'<div class="{project_class}">{html.escape(pid)} | {html.escape(pname)}</div>'
-                )
-            last_project = pid
+        project_groups.setdefault(pid, []).append(row)
 
-        task = html.escape(clean(row.get("task")))
-        pic = html.escape(clean(row.get("pic")))
-        activity_type = clean(row.get("activity_type")).lower()
+    project_items = sorted(project_groups.items(), key=lambda item: (item[0] == "", item[0]))
+    visible_projects = project_items[:3]
+    hidden_project_count = max(0, len(project_items) - 3)
 
-        sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
-        pic_html = f" <span style='color:#475467'>({pic.upper()})</span>" if pic else ""
+    chunks = []
 
+    for pid, project_rows in visible_projects:
+        pname = clean(project_rows[0].get("project_name"))
         chunks.append(
-            f'<div class="task {"submission" if activity_type == "submission" else ""}">'
-            f'• {task}{pic_html} {sign}</div>'
+            f'<div class="project">{html.escape(pid)} | {html.escape(pname)}</div>'
+        )
+
+        sorted_tasks = sorted(
+            project_rows,
+            key=lambda row: (
+                priority_rank(row.get("priority")),
+                clean(row.get("task")).lower(),
+                int(row.get("id") or 0),
+            )
+        )
+
+        visible_tasks = sorted_tasks[:3]
+        hidden_task_count = max(0, len(sorted_tasks) - 3)
+
+        for row in visible_tasks:
+            task = html.escape(clean(row.get("task")))
+            pic = html.escape(clean(row.get("pic")))
+            activity_type = clean(row.get("activity_type")).lower()
+            sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
+            pic_html = f" <span style='color:#475467'>({pic.upper()})</span>" if pic else ""
+
+            chunks.append(
+                f'<div class="task {"submission" if activity_type == "submission" else ""}">'
+                f'• {task}{pic_html} {sign}</div>'
+            )
+
+        if hidden_task_count:
+            chunks.append(
+                f'<div class="more-items">+{hidden_task_count} more task'
+                f'{"s" if hidden_task_count != 1 else ""}</div>'
+            )
+
+    if hidden_project_count:
+        chunks.append(
+            f'<div class="more-items">+{hidden_project_count} more project'
+            f'{"s" if hidden_project_count != 1 else ""}</div>'
         )
 
     return "".join(chunks)
@@ -1047,9 +1029,6 @@ def weekly_dashboard():
     # ========================================================
     # STICKY DASHBOARD HEADER
     # ========================================================
-    # V2f freeze experiment: the complete dashboard header is rendered in a
-    # dedicated fixed layer. The schedule remains the scrolling content below.
-    st.markdown('<div id="weekly-dashboard-fixed-start"></div>', unsafe_allow_html=True)
     header = st.container()
     with header:
         st.markdown('<div id="weekly-dashboard-anchor"></div>', unsafe_allow_html=True)
