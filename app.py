@@ -53,16 +53,21 @@ st.markdown(
         display: flex;
         align-items: center;
     }
+    /* Project + Activity use Streamlit popovers. The popover itself has
+       Streamlit's built-in vertical spacing, so move the actual control
+       upward to the same baseline as Month / Year / Week. */
     .filter-popover-wrap {
         width: 100% !important;
-        margin-top: -15px !important;
-        padding-top: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
-    .filter-popover-wrap > div[data-testid="stPopover"] {
+    div[data-testid="stPopover"] {
         width: 100% !important;
-        margin-top: 0 !important;
+        position: relative !important;
+        top: -14px !important;
+        margin-bottom: -14px !important;
     }
-    .filter-popover-wrap > div[data-testid="stPopover"] > button {
+    div[data-testid="stPopover"] > button {
         margin-top: 0 !important;
     }
     .filter-popover-wrap button {
@@ -818,8 +823,6 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
     selected = []
 
     with st.container():
-        st.markdown('<div class="filter-popover-wrap">', unsafe_allow_html=True)
-
         if all_selected:
             # Button text is intentionally simple and centred like the baseline.
             button_text = all_label
@@ -846,7 +849,6 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
                     if st.checkbox(text, key=key):
                         selected.append(opt)
 
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # If user activates All, clear individual choices so the next opening
     # of the popover contains only All, matching the approved UX.
