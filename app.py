@@ -53,8 +53,17 @@ st.markdown(
         display: flex;
         align-items: center;
     }
+    .filter-popover-wrap {
+        width: 100% !important;
+        margin-top: -15px !important;
+        padding-top: 0 !important;
+    }
     .filter-popover-wrap > div[data-testid="stPopover"] {
-        width: 100%;
+        width: 100% !important;
+        margin-top: 0 !important;
+    }
+    .filter-popover-wrap > div[data-testid="stPopover"] > button {
+        margin-top: 0 !important;
     }
     .filter-popover-wrap button {
         width: 100% !important;
