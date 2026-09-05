@@ -207,6 +207,10 @@ st.markdown(
     }
     .empty {color:#98A2B3; font-size:.72rem;}
     .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
+
+    .date-detail-link {display:block; color:inherit; text-decoration:none; border-radius:10px; padding:.15rem .1rem;}
+    .date-detail-link:hover {background:#EEF4FF; text-decoration:none;}
+    .date-detail-link .dow, .date-detail-link .day {pointer-events:none;}
     /* KPI cards — visual enhancement only; filter/dashboard layout remains unchanged. */
     .kpi-row {
         display:grid;
@@ -961,8 +965,12 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
     grid.append('<div class="schedule-head activity-head">ACTIVITY</div>')
     for d in days:
         grid.append(
-            f'<div class="schedule-head"><div class="dow">{fmt_day(d)}</div>'
-            f'<div class="day">{d.strftime("%d %b")}</div></div>'
+            f'<div class="schedule-head">'
+            f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" '
+            f'title="View all activities for {d.strftime("%d %b %Y")}">'
+            f'<div class="dow">{fmt_day(d)}</div>'
+            f'<div class="day">{d.strftime("%d %b")}</div>'
+            f'</a></div>'
         )
 
     lane_specs = [
@@ -1051,9 +1059,135 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
     return (list(options), True) if st.session_state[all_key] else (selected, False)
 
 
+
+@st.dialog("Activity Detail", width="large")
+def show_date_detail(detail_date, work, meetings, others, visible_activities):
+    """Show the complete activity list for one date, without the dashboard limits."""
+    st.markdown(
+        f'<div class="app-subtitle" style="margin-top:-.35rem;">'
+        f'{detail_date.strftime("%A, %d %B %Y")}</div>',
+        unsafe_allow_html=True,
+    )
+
+    if "work" in visible_activities:
+        st.markdown("### ▣ Work")
+        wrows = []
+        if not work.empty:
+            wrows = work[work["end_date"] == detail_date.isoformat()].copy()
+
+        if wrows:
+            groups = {}
+            for _, row in wrows.iterrows():
+                groups.setdefault(clean(row.get("project_id")), []).append(row)
+
+            for pid, rows in sorted(groups.items(), key=lambda x: (x[0] == "", x[0])):
+                pname = clean(rows[0].get("project_name"))
+                st.markdown(f"**{pid} | {pname}**")
+                rows = sorted(
+                    rows,
+                    key=lambda r: (
+                        priority_rank(r.get("priority")),
+                        clean(r.get("task")).lower(),
+                        int(r.get("id") or 0),
+                    ),
+                )
+                for row in rows:
+                    task = clean(row.get("task"))
+                    pic = clean(row.get("pic"))
+                    priority = clean(row.get("priority"))
+                    submission = clean(row.get("activity_type")).lower() == "submission"
+                    suffix = " **!!**" if submission else ""
+                    pic_text = f" ({pic.upper()})" if pic else ""
+                    st.markdown(
+                        f"• {task}{pic_text} — `{priority}`{suffix}"
+                    )
+        else:
+            st.caption("No work activity.")
+
+    if "meeting" in visible_activities:
+        st.markdown("### ● Meetings")
+        mrows = []
+        if not meetings.empty:
+            mrows = meetings[meetings["activity_date"] == detail_date.isoformat()].copy()
+
+        if mrows:
+            groups = {}
+            for _, row in mrows.iterrows():
+                groups.setdefault(clean(row.get("project_id")), []).append(row)
+
+            for pid, rows in sorted(groups.items(), key=lambda x: (x[0] == "", x[0])):
+                if pid:
+                    pname = clean(rows[0].get("project_name"))
+                    st.markdown(f"**{pid} | {pname}**")
+
+                rows = sorted(
+                    rows,
+                    key=lambda r: (
+                        clean(r.get("start_time")),
+                        clean(r.get("meeting_type")).lower(),
+                        int(r.get("id") or 0),
+                    ),
+                )
+                for row in rows:
+                    attendees = [
+                        clean(row.get("attendee_1")),
+                        clean(row.get("attendee_2")),
+                        clean(row.get("attendee_3")),
+                        clean(row.get("attendee_4")),
+                    ]
+                    attendees = ", ".join(a.upper() for a in attendees if a)
+                    st.markdown(
+                        f"• {clean(row.get('meeting_type'))}"
+                        f"<br>&nbsp;&nbsp;PIC: {attendees}"
+                        f"<br>&nbsp;&nbsp;Time: {clean(row.get('start_time'))} – {clean(row.get('end_time'))}"
+                        f"<br>&nbsp;&nbsp;Location: {clean(row.get('location'))}",
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.caption("No meeting activity.")
+
+    if "other" in visible_activities:
+        st.markdown("### ••• Other Activities")
+        orows = []
+        if not others.empty:
+            orows = others[others["activity_date"] == detail_date.isoformat()].copy()
+
+        if orows:
+            orows = sorted(
+                orows,
+                key=lambda r: (
+                    clean(r.get("activity")).lower(),
+                    clean(r.get("related_staff")).lower(),
+                    int(r.get("id") or 0),
+                ),
+            )
+            for row in orows:
+                activity = clean(row.get("activity"))
+                staff = clean(row.get("related_staff"))
+                st.markdown(
+                    f"• {activity}"
+                    + (f"<br>&nbsp;&nbsp;Related Staff: {staff.upper()}" if staff else ""),
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("No other activity.")
+
+
 def weekly_dashboard():
     projects = get_projects()
     project_options = (["All"] + projects["id"].tolist()) if not projects.empty else ["All"]
+
+    # Date-detail overlay: clicking a date opens a modal on the same page.
+    detail_date_value = st.query_params.get("detail_date")
+    detail_date = None
+    if detail_date_value:
+        try:
+            detail_date = parse_date(detail_date_value)
+        except Exception:
+            detail_date = None
+        # Remove the trigger so closing the dialog does not make it reopen
+        # on the next Streamlit rerun.
+        st.query_params.pop("detail_date", None)
 
     # Calendar range is derived from data + current year; no Setup entry needed.
     conn = get_conn()
@@ -1188,6 +1322,16 @@ def weekly_dashboard():
             )
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
+
+        if detail_date is not None:
+            show_date_detail(
+                detail_date,
+                work,
+                meetings,
+                others,
+                visible_activities,
+            )
+
     selected_weeks = list(enumerate(weeks, start=1))
     if selected_week != "All":
         idx = int(selected_week.split()[1])
