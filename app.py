@@ -816,42 +816,77 @@ def render_meeting_cell(rows):
     if not rows:
         return '<div class="empty">—</div>'
 
-    chunks = []
-    last_project = None
-
+    # Same dashboard display rule as Work:
+    # max 3 projects per date, max 3 meetings per project.
+    project_groups = {}
     for row in rows:
         pid = clean(row.get("project_id"))
-        pname = clean(row.get("project_name"))
-        if pid != last_project:
-            if pid:
-                project_class = "project project-start" if last_project is not None else "project"
-                chunks.append(
-                    f'<div class="{project_class}">{html.escape(pid)} | {html.escape(pname)}</div>'
-                )
-            last_project = pid
+        project_groups.setdefault(pid, []).append(row)
 
-        attendees = [
-            clean(row.get("attendee_1")),
-            clean(row.get("attendee_2")),
-            clean(row.get("attendee_3")),
-            clean(row.get("attendee_4")),
-        ]
-        attendees = ", ".join([a.upper() for a in attendees if a])
+    project_items = sorted(
+        project_groups.items(),
+        key=lambda item: (item[0] == "", item[0])
+    )
 
+    visible_projects = project_items[:3]
+    hidden_project_count = max(0, len(project_items) - 3)
+
+    chunks = []
+
+    for pid, project_rows in visible_projects:
+        pname = clean(project_rows[0].get("project_name"))
         chunks.append(
-            '<div class="task">• '
-            + html.escape(clean(row.get("meeting_type")))
-            + '</div>'
+            f'<div class="project">{html.escape(pid)} | {html.escape(pname)}</div>'
         )
-        chunks.append(
-            f'<div class="meta">PIC: {html.escape(attendees)}</div>'
+
+        # Keep meetings in chronological order within each project.
+        sorted_meetings = sorted(
+            project_rows,
+            key=lambda row: (
+                clean(row.get("start_time")),
+                clean(row.get("meeting_type")).lower(),
+                int(row.get("id") or 0),
+            )
         )
+
+        visible_meetings = sorted_meetings[:3]
+        hidden_meeting_count = max(0, len(sorted_meetings) - 3)
+
+        for row in visible_meetings:
+            attendees = [
+                clean(row.get("attendee_1")),
+                clean(row.get("attendee_2")),
+                clean(row.get("attendee_3")),
+                clean(row.get("attendee_4")),
+            ]
+            attendees = ", ".join([a.upper() for a in attendees if a])
+
+            chunks.append(
+                '<div class="task">• '
+                + html.escape(clean(row.get("meeting_type")))
+                + '</div>'
+            )
+            chunks.append(
+                f'<div class="meta">PIC: {html.escape(attendees)}</div>'
+            )
+            chunks.append(
+                f'<div class="meta">Time: {html.escape(clean(row.get("start_time")))}'
+                f' – {html.escape(clean(row.get("end_time")))}</div>'
+            )
+            chunks.append(
+                f'<div class="meta">Location: {html.escape(clean(row.get("location")))}</div>'
+            )
+
+        if hidden_meeting_count:
+            chunks.append(
+                f'<div class="more-items">+{hidden_meeting_count} more meeting'
+                f'{"s" if hidden_meeting_count != 1 else ""}</div>'
+            )
+
+    if hidden_project_count:
         chunks.append(
-            f'<div class="meta">Time: {html.escape(clean(row.get("start_time")))}'
-            f' – {html.escape(clean(row.get("end_time")))}</div>'
-        )
-        chunks.append(
-            f'<div class="meta">Location: {html.escape(clean(row.get("location")))}</div>'
+            f'<div class="more-items">+{hidden_project_count} more project'
+            f'{"s" if hidden_project_count != 1 else ""}</div>'
         )
 
     return "".join(chunks)
@@ -861,15 +896,36 @@ def render_other_cell(rows):
     if not rows:
         return '<div class="empty">—</div>'
 
+    # Other activities are non-project activities, so the limit is
+    # max 3 activities per date.
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (
+            clean(row.get("activity")).lower(),
+            clean(row.get("related_staff")).lower(),
+            int(row.get("id") or 0),
+        )
+    )
+
+    visible_rows = sorted_rows[:3]
+    hidden_count = max(0, len(sorted_rows) - 3)
+
     chunks = []
-    for row in rows:
+    for row in visible_rows:
         activity = html.escape(clean(row.get("activity")))
         staff = html.escape(clean(row.get("related_staff")))
         chunks.append(
             f'<div class="other-item">• {activity}'
-            + (f'<div class="meta">Related Staff: {staff}</div>' if staff else "")
+            + (f'<div class="meta">Related Staff: {staff.upper()}</div>' if staff else "")
             + "</div>"
         )
+
+    if hidden_count:
+        chunks.append(
+            f'<div class="more-items">+{hidden_count} more activit'
+            f'{"ies" if hidden_count != 1 else "y"}</div>'
+        )
+
     return "".join(chunks)
 
 
