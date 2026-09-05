@@ -209,7 +209,7 @@ st.markdown(
     .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
 
     .date-detail-link {display:block; color:inherit; text-decoration:none; border-radius:10px; padding:.15rem .1rem;}
-    .date-detail-link:hover {background:#EEF4FF; text-decoration:none;}
+    .date-detail-link:hover {background:#EEF4FF; text-decoration:none; cursor:pointer;}
     .date-detail-link .dow, .date-detail-link .day {pointer-events:none;}
     /* KPI cards — visual enhancement only; filter/dashboard layout remains unchanged. */
     .kpi-row {
@@ -966,7 +966,7 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
     for d in days:
         grid.append(
             f'<div class="schedule-head">'
-            f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" '
+            f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" target="_self" '
             f'title="View all activities for {d.strftime("%d %b %Y")}">'
             f'<div class="dow">{fmt_day(d)}</div>'
             f'<div class="day">{d.strftime("%d %b")}</div>'
@@ -1075,7 +1075,7 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
         if not work.empty:
             wrows = work[work["end_date"] == detail_date.isoformat()].copy()
 
-        if wrows:
+        if not wrows.empty:
             groups = {}
             for _, row in wrows.iterrows():
                 groups.setdefault(clean(row.get("project_id")), []).append(row)
@@ -1110,7 +1110,7 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
         if not meetings.empty:
             mrows = meetings[meetings["activity_date"] == detail_date.isoformat()].copy()
 
-        if mrows:
+        if not mrows.empty:
             groups = {}
             for _, row in mrows.iterrows():
                 groups.setdefault(clean(row.get("project_id")), []).append(row)
@@ -1152,7 +1152,7 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
         if not others.empty:
             orows = others[others["activity_date"] == detail_date.isoformat()].copy()
 
-        if orows:
+        if not orows.empty:
             orows = sorted(
                 orows,
                 key=lambda r: (
