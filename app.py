@@ -122,11 +122,23 @@ st.markdown(
         min-height: 130px;
         padding: 0.75rem 0.55rem;
         font-weight: 800;
-        font-size: 0.78rem;
+        font-size: 0.90rem;
         letter-spacing: .04em;
         border-right: 1px solid #D0D5DD;
         color:#344054;
     }
+    .lane-icon {
+        display:inline-flex;
+        width:1.15rem;
+        margin-right:.35rem;
+        align-items:center;
+        justify-content:center;
+        font-size:1rem;
+        font-weight:900;
+    }
+    .work-lane .lane-icon {color:#1479E9;}
+    .meeting-lane .lane-icon {color:#D99A00;}
+    .other-lane .lane-icon {color:#8B5CF6;}
     .lane-label.work-lane {background:#E8F3FF;}
     .lane-label.meeting-lane {background:#FFF7D6;}
     .lane-label.other-lane {background:#F2E9FF;}
@@ -155,8 +167,8 @@ st.markdown(
         border-top: 1px solid rgba(16,24,40,.10);
     }
     .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
-    .task.submission {font-weight: 700; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
-    .sign {color:#D92D20; font-weight: 900; margin-left: 0.2rem;}
+    .task.submission {font-weight: 750; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
+    .sign {color:#D92D20; font-weight: 950; margin-left: 0.2rem; letter-spacing:-.08em;}
     .meta {
         margin-left: 1.05rem;
         font-size: 0.73rem;
@@ -241,7 +253,7 @@ st.markdown(
     .kpi.submission .kpi-label {color:#E33A40;}
     .kpi.other .kpi-label {color:#7040D8;}
     .kpi-value {
-        font-size:2rem;
+        font-size:2.12rem;
         line-height:1;
         font-weight:850;
         color:#102A56;
@@ -623,7 +635,15 @@ def load_activities(start_date, end_date, project_filter):
         FROM work_activity w
         LEFT JOIN projects p ON p.id=w.project_id
         WHERE w.end_date >= ? AND w.end_date <= ? {p_clause}
-        ORDER BY w.end_date, w.project_id, w.id
+        ORDER BY w.end_date,
+                 CAST(REPLACE(UPPER(COALESCE(w.project_id,'')), 'P', '') AS INTEGER),
+                 CASE LOWER(COALESCE(w.priority,''))
+                     WHEN 'high' THEN 1
+                     WHEN 'medium' THEN 2
+                     WHEN 'low' THEN 3
+                     ELSE 4
+                 END,
+                 w.id
         """,
         conn,
         params=params,
@@ -641,7 +661,9 @@ def load_activities(start_date, end_date, project_filter):
         FROM meeting_activity m
         LEFT JOIN projects p ON p.id=m.project_id
         WHERE m.activity_date >= ? AND m.activity_date <= ? {p_clause}
-        ORDER BY m.activity_date, m.start_time, m.id
+        ORDER BY m.activity_date,
+                 CAST(REPLACE(UPPER(COALESCE(m.project_id,'')), 'P', '') AS INTEGER),
+                 m.start_time, m.id
         """,
         conn,
         params=params,
@@ -719,7 +741,7 @@ def render_work_cell(rows):
         pic = html.escape(clean(row.get("pic")))
         activity_type = clean(row.get("activity_type")).lower()
 
-        sign = '<span class="sign">▲!</span>' if activity_type == "submission" else ""
+        sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
         pic_html = f" <span style='color:#667085'>({pic})</span>" if pic else ""
 
         chunks.append(
@@ -825,12 +847,16 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
             f'<div class="day">{d.strftime("%d %b")}</div></div>'
         )
 
-    lane_specs = [("WORK", "work"), ("MEETING", "meeting"), ("OTHER", "other")]
+    lane_specs = [
+        ("WORK", "work", "▣"),
+        ("MEETING", "meeting", "●"),
+        ("OTHER", "other", "•••"),
+    ]
     lane_specs = [x for x in lane_specs if x[1] in visible_activities]
 
-    for lane_name, lane_type in lane_specs:
+    for lane_name, lane_type, lane_icon in lane_specs:
         grid.append(
-            f'<div class="lane-label {lane_type}-lane">{lane_name}</div>'
+            f'<div class="lane-label {lane_type}-lane"><span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
         )
 
         for d in days:
