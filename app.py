@@ -43,6 +43,39 @@ st.markdown(
         backdrop-filter: blur(10px) !important;
     }
     #weekly-dashboard-anchor {height: 0; overflow: hidden;}
+    .filter-label {
+        font-size: 0.78rem;
+        line-height: 1.2;
+        color: #344054;
+        font-weight: 500;
+        margin: 0 0 0.38rem 0.05rem;
+        height: 18px;
+        display: flex;
+        align-items: center;
+    }
+    .filter-popover-wrap > div[data-testid="stPopover"] {
+        width: 100%;
+    }
+    .filter-popover-wrap button {
+        width: 100% !important;
+        height: 50px !important;
+        min-height: 50px !important;
+        border-radius: 10px !important;
+        border: 1px solid #D0D5DD !important;
+        background: #FFFFFF !important;
+        color: #344054 !important;
+        font-size: 0.9rem !important;
+        font-weight: 400 !important;
+        justify-content: center !important;
+        padding: 0 14px !important;
+    }
+    .filter-popover-wrap button:hover {
+        border-color: #98A2B3 !important;
+        background: #FCFCFD !important;
+    }
+    .filter-popover-wrap button:focus {
+        box-shadow: 0 0 0 2px rgba(20,121,233,.12) !important;
+    }
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
     .app-subtitle {color:#667085; margin-bottom:1rem;}
@@ -756,9 +789,8 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
 
 def checklist_filter(label, options, all_label, key_prefix, format_func=None):
-    """Compact checklist filter. When All is selected, individual options are
-    intentionally hidden. When All is cleared, individual checkboxes appear.
-    Returns (effective_selection, all_selected).
+    """Popover checklist with the same two-row geometry as the dropdown filters:
+    label on top, control box below. All hides individual choices.
     """
     all_key = f"{key_prefix}_all"
     if all_key not in st.session_state:
@@ -769,20 +801,51 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
         if key not in st.session_state:
             st.session_state[key] = False
 
-    selected = []
-    with st.popover(label, use_container_width=True):
-        all_selected = st.checkbox(all_label, key=all_key)
-        if all_selected:
-            st.caption("All selected")
-        else:
-            for opt in options:
-                key = f"{key_prefix}_{opt}"
-                text = format_func(opt) if format_func else opt
-                if st.checkbox(text, key=key):
-                    selected.append(opt)
+    # Keep the label outside the popover so Project/Activity align exactly
+    # with Month/Year/Week labels and controls.
+    st.markdown(f'<div class="filter-label">{html.escape(label)}</div>', unsafe_allow_html=True)
 
+    all_selected = st.session_state[all_key]
+    selected = []
+
+    with st.container():
+        st.markdown('<div class="filter-popover-wrap">', unsafe_allow_html=True)
+
+        if all_selected:
+            # Button text is intentionally simple and centred like the baseline.
+            button_text = all_label
+        else:
+            active = [
+                (format_func(opt) if format_func else opt)
+                for opt in options
+                if st.session_state[f"{key_prefix}_{opt}"]
+            ]
+            if not active:
+                button_text = "Select..."
+            elif len(active) == 1:
+                button_text = active[0]
+            else:
+                button_text = f"{len(active)} selected"
+
+        with st.popover(button_text, use_container_width=True):
+            all_selected = st.checkbox(all_label, key=all_key)
+
+            if not all_selected:
+                for opt in options:
+                    key = f"{key_prefix}_{opt}"
+                    text = format_func(opt) if format_func else opt
+                    if st.checkbox(text, key=key):
+                        selected.append(opt)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # If user activates All, clear individual choices so the next opening
+    # of the popover contains only All, matching the approved UX.
     if st.session_state[all_key]:
+        for opt in options:
+            st.session_state[f"{key_prefix}_{opt}"] = False
         return list(options), True
+
     return selected, False
 
 
