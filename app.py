@@ -119,22 +119,30 @@ st.markdown(
     .schedule-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
     .schedule-head .day {font-size: 1rem; color:#101828;}
     .lane-label {
-        min-height: 130px;
-        padding: 0.75rem 0.55rem;
-        font-weight: 800;
-        font-size: 0.90rem;
-        letter-spacing: .04em;
-        border-right: 1px solid #D0D5DD;
-        color:#344054;
-    }
-    .lane-icon {
-        display:inline-flex;
-        width:1.15rem;
-        margin-right:.35rem;
+        min-height: 150px;
+        padding: 0.9rem 0.45rem;
+        font-weight: 850;
+        font-size: 1.02rem;
+        letter-spacing: .035em;
+        border-right: 1px solid rgba(16,24,40,.10);
+        color:#172B4D;
+        display:flex;
+        flex-direction:column;
         align-items:center;
         justify-content:center;
-        font-size:1rem;
+        gap:0.55rem;
+    }
+    .lane-icon {
+        display:flex;
+        width:38px;
+        height:38px;
+        border-radius:11px;
+        align-items:center;
+        justify-content:center;
+        font-size:1.22rem;
         font-weight:900;
+        background:rgba(255,255,255,.72);
+        box-shadow:0 2px 7px rgba(16,24,40,.08);
     }
     .work-lane .lane-icon {color:#1479E9;}
     .meeting-lane .lane-icon {color:#D99A00;}
@@ -159,14 +167,15 @@ st.markdown(
     .project {
         font-weight: 750;
         color:#101828;
-        margin: 0.12rem 0 0.35rem;
+        margin: 0.10rem 0 0.28rem;
     }
-    .project + .project {
-        margin-top: 0.85rem;
-        padding-top: 0.55rem;
-        border-top: 1px solid rgba(16,24,40,.10);
+    /* Project groups are separated; project header and its tasks stay tight. */
+    .project.project-start {
+        margin-top: 0.95rem;
+        padding-top: 0.62rem;
+        border-top: 1px solid rgba(16,24,40,.13);
     }
-    .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
+    .task {font-size: 0.82rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
     .task.submission {font-weight: 750; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
     .sign {color:#D92D20; font-weight: 950; margin-left: 0.2rem; letter-spacing:-.08em;}
     .meta {
@@ -241,7 +250,7 @@ st.markdown(
     .kpi.other .kpi-icon {background:#8B5CF6;color:#fff;}
     .kpi-content {position:relative;z-index:2;}
     .kpi-label {
-        font-size:.74rem;
+        font-size:.82rem;
         line-height:1.2;
         font-weight:800;
         letter-spacing:.025em;
@@ -253,7 +262,7 @@ st.markdown(
     .kpi.submission .kpi-label {color:#E33A40;}
     .kpi.other .kpi-label {color:#7040D8;}
     .kpi-value {
-        font-size:2.12rem;
+        font-size:2.42rem;
         line-height:1;
         font-weight:850;
         color:#102A56;
@@ -732,8 +741,9 @@ def render_work_cell(rows):
         pname = clean(row.get("project_name"))
         if pid != last_project:
             if pid:
+                project_class = "project project-start" if last_project is not None else "project"
                 chunks.append(
-                    f'<div class="project">{html.escape(pid)} | {html.escape(pname)}</div>'
+                    f'<div class="{project_class}">{html.escape(pid)} | {html.escape(pname)}</div>'
                 )
             last_project = pid
 
@@ -764,8 +774,9 @@ def render_meeting_cell(rows):
         pname = clean(row.get("project_name"))
         if pid != last_project:
             if pid:
+                project_class = "project project-start" if last_project is not None else "project"
                 chunks.append(
-                    f'<div class="project">{html.escape(pid)} | {html.escape(pname)}</div>'
+                    f'<div class="{project_class}">{html.escape(pid)} | {html.escape(pname)}</div>'
                 )
             last_project = pid
 
