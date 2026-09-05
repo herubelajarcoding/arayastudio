@@ -34,102 +34,49 @@ st.markdown(
     """
     <style>
     .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
-    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {
-        position: -webkit-sticky !important; position: sticky !important; top: 0 !important;
-        z-index: 1000 !important; background: rgba(255,255,255,.98) !important;
-        padding: .15rem 0 .85rem !important; margin-bottom: .35rem !important;
-        border-bottom: 1px solid #D0D5DD !important;
-        box-shadow: 0 6px 14px rgba(16,24,40,.07) !important;
-        backdrop-filter: blur(10px) !important;
-    }
-    #weekly-dashboard-anchor {height: 0; overflow: hidden;}
+    .st-key-weekly-dashboard-header {position: sticky; top: 0; z-index: 1000; background: rgba(255,255,255,.98); padding: .15rem 0 .85rem; margin-top: -.35rem; border-bottom: 1px solid #E4E7EC; box-shadow: 0 5px 16px rgba(16,24,40,.06); backdrop-filter: blur(10px);}
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
-    .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
-    .app-subtitle {color:#667085; margin-bottom:1rem;}
+    .brand {font-size:.88rem; font-weight:800; letter-spacing:.04em; color:#182B49; margin-bottom:.1rem;}
+    .app-title {font-size: 2.05rem; font-weight: 800; line-height:1.05; color:#10213F; margin-bottom:0.12rem;}
+    .app-subtitle {color:#667085; margin-bottom:.85rem; font-size:.82rem;}
     .week-title {
-        font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
-        border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
-        text-align: center; color:#172B4D; letter-spacing:.01em;
+        font-size: 1.28rem; font-weight: 850; padding: .78rem .7rem;
+        text-align:center; color:#10213F; background:#F7F9FC; margin-top: 1rem;
+        border-top:1px solid #EAECF0; border-bottom:1px solid #EAECF0;
     }
     .schedule-grid {
-        display: grid;
-        grid-template-columns: minmax(105px, .8fr) repeat(7, minmax(135px, 1fr));
-        align-items: stretch;
-        gap: 0;
-        width: 100%;
-        overflow-x: auto;
-        border-left: 1px solid #EAECF0;
-        border-top: 1px solid #EAECF0;
-        border-radius: 0 0 8px 8px;
+        display:grid; grid-template-columns:minmax(135px, .8fr) repeat(7,minmax(145px,1fr));
+        align-items:stretch; gap:7px; width:100%; overflow-x:auto;
+        background:#FFFFFF;
     }
-    .schedule-head {
-        min-height: 58px;
-        padding: 0.45rem 0.3rem;
-        font-weight: 700;
-        text-align: center;
-        background: #F8FAFC;
-        border-right: 1px solid #EAECF0;
-        border-bottom: 1px solid #D0D5DD;
-    }
+    .schedule-head {min-height:58px; padding:.55rem .3rem; font-weight:750; text-align:center; background:#F7F9FC; border:1px solid #E4E7EC; border-radius:7px; color:#14233D;}
     .activity-head {display:flex;align-items:center;justify-content:center;}
     .schedule-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
     .schedule-head .day {font-size: 1rem; color:#101828;}
-    .lane-label {
-        min-height: 130px;
-        padding: 0.75rem 0.55rem;
-        font-weight: 800;
-        font-size: 0.78rem;
-        letter-spacing: .04em;
-        border-right: 1px solid #D0D5DD;
-        color:#344054;
-    }
+    .lane-label {min-height:130px; padding:1rem .7rem; font-weight:850; font-size:.88rem; letter-spacing:.03em; color:#10213F; border:1px solid #E4E7EC; border-radius:7px;}
     .lane-label.work-lane {background:#E8F3FF;}
     .lane-label.meeting-lane {background:#FFF7D6;}
     .lane-label.other-lane {background:#F2E9FF;}
     .cell.work-cell {background:#F4FAFF;}
     .cell.meeting-cell {background:#FFFBEA;}
-    .meeting-cell .project {color:#1F2937;}
-    .meeting-cell .task {color:#172B4D; font-weight:650;}
-    .meeting-cell .meta {color:#475467; font-weight:500;}
-    .work-cell .project, .other-cell .other-item {color:#172B4D;}
     .cell.other-cell {background:#FAF5FF;}
-    .cell {
-        min-height: 130px;
-        padding: 0.55rem;
-        border-right: 1px solid #EAECF0;
-        border-bottom: 1px solid #EAECF0;
-        background: white;
-    }
-    .project {
-        font-weight: 750;
-        color:#101828;
-        margin: 0.12rem 0 0.35rem;
-    }
+    .cell {min-height:130px; padding:.62rem; border:1px solid #E4E7EC; border-radius:7px; background:white;}
+    .project {font-weight:850; color:#10213F; margin:.1rem 0 .38rem; font-size:.82rem;}
     .project + .project {
         margin-top: 0.85rem;
         padding-top: 0.55rem;
         border-top: 1px solid rgba(16,24,40,.10);
     }
-    .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
-    .task.submission {font-weight: 700; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
-    .sign {color:#D92D20; font-weight: 900; margin-left: 0.2rem;}
-    .meta {
-        margin-left: 1.05rem;
-        font-size: 0.73rem;
-        color:#667085;
-        line-height: 1.3;
-    }
+    .task {font-size:.81rem; line-height:1.4; margin:.27rem 0; color:#182B49; font-weight:560;}
+    .task.submission {font-weight:800; color:#C62828; background:#FFE6E6; border-radius:6px; padding:3px 6px;}
+    .sign {color:#D92D20; font-weight:950; margin-left:.25rem;}
+    .meta {margin-left:1.05rem; font-size:.72rem; color:#53627A; line-height:1.35; font-weight:520;}
     .other-item {
         font-size: 0.79rem;
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .kpi {
-        padding: 0.8rem 1rem;
-        border: 1px solid #EAECF0;
-        border-radius: 10px;
-        background: white;
-    }
+    .kpi {padding:.8rem 1rem; border:1px solid #E4E7EC; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(16,24,40,.03);}
     .kpi-label {font-size:.72rem;color:#667085;text-transform:uppercase;}
     .kpi-value {font-size:1.35rem;font-weight:750;color:#101828;}
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
@@ -599,7 +546,7 @@ def render_work_cell(rows):
         pic = html.escape(clean(row.get("pic")))
         activity_type = clean(row.get("activity_type")).lower()
 
-        sign = '<span class="sign">▲!</span>' if activity_type == "submission" else ""
+        sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
         pic_html = f" <span style='color:#667085'>({pic})</span>" if pic else ""
 
         chunks.append(
@@ -689,10 +636,8 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
             d = parse_date(row["activity_date"])
             other_groups.setdefault(d, []).append(row)
 
-    week_no = ((start_date.day - 1) // 7) + 1
     st.markdown(
-        f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
-        f'{end_date.strftime("%d %b %Y")}</div>',
+        f'<div class="week-title">WEEK {((start_date.day - 1) // 7) + 1} • {start_date.strftime("%d %b")} – {end_date.strftime("%d %b %Y")}</div>',
         unsafe_allow_html=True,
     )
 
@@ -806,9 +751,9 @@ def weekly_dashboard():
     # ========================================================
     # STICKY DASHBOARD HEADER
     # ========================================================
-    header = st.container()
+    header = st.container(key="weekly_dashboard_header")
     with header:
-        st.markdown('<div id="weekly-dashboard-anchor"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="brand">STUDIO ASIA RAYA</div>', unsafe_allow_html=True)
         st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
         st.markdown(
             '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
