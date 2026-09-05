@@ -34,29 +34,49 @@ st.markdown(
     """
     <style>
     .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
-    #weekly-dashboard-sticky {position: sticky; top: 0; z-index: 1000; background: rgba(255,255,255,.97); padding: .2rem 0 .8rem; border-bottom: 1px solid #EAECF0; backdrop-filter: blur(8px);}
-    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {position: sticky; top: 0; z-index: 999; background: rgba(255,255,255,.97); padding-bottom: .6rem; border-bottom: 1px solid #EAECF0; backdrop-filter: blur(8px);}
+    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {
+        position: -webkit-sticky !important; position: sticky !important; top: 0 !important;
+        z-index: 1000 !important; background: rgba(255,255,255,.98) !important;
+        padding: .15rem 0 .85rem !important; margin-bottom: .35rem !important;
+        border-bottom: 1px solid #D0D5DD !important;
+        box-shadow: 0 6px 14px rgba(16,24,40,.07) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    #weekly-dashboard-anchor {height: 0; overflow: hidden;}
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
     .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
-        font-size: 1rem; font-weight: 750; padding: 0.55rem 0.7rem;
-        border-radius: 8px; background: #F2F4F7; margin-top: 0.8rem;
+        font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
+        border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
+        text-align: center; color:#172B4D; letter-spacing:.01em;
     }
-    .day-head {
-        border-bottom: 1px solid #D0D5DD;
+    .schedule-grid {
+        display: grid;
+        grid-template-columns: minmax(105px, .8fr) repeat(7, minmax(135px, 1fr));
+        align-items: stretch;
+        gap: 0;
+        width: 100%;
+        overflow-x: auto;
+        border-left: 1px solid #EAECF0;
+        border-top: 1px solid #EAECF0;
+        border-radius: 0 0 8px 8px;
+    }
+    .schedule-head {
+        min-height: 58px;
         padding: 0.45rem 0.3rem;
         font-weight: 700;
         text-align: center;
         background: #F8FAFC;
-        min-height: 58px;
+        border-right: 1px solid #EAECF0;
+        border-bottom: 1px solid #D0D5DD;
     }
-    .day-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
-    .day-head .day {font-size: 1rem; color:#101828;}
+    .activity-head {display:flex;align-items:center;justify-content:center;}
+    .schedule-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
+    .schedule-head .day {font-size: 1rem; color:#101828;}
     .lane-label {
-        height: 100%;
         min-height: 130px;
-        padding: 0.65rem 0.45rem;
+        padding: 0.75rem 0.55rem;
         font-weight: 800;
         font-size: 0.78rem;
         letter-spacing: .04em;
@@ -68,10 +88,14 @@ st.markdown(
     .lane-label.other-lane {background:#F2E9FF;}
     .cell.work-cell {background:#F4FAFF;}
     .cell.meeting-cell {background:#FFFBEA;}
+    .meeting-cell .project {color:#1F2937;}
+    .meeting-cell .task {color:#172B4D; font-weight:650;}
+    .meeting-cell .meta {color:#475467; font-weight:500;}
+    .work-cell .project, .other-cell .other-item {color:#172B4D;}
     .cell.other-cell {background:#FAF5FF;}
     .cell {
         min-height: 130px;
-        padding: 0.45rem;
+        padding: 0.55rem;
         border-right: 1px solid #EAECF0;
         border-bottom: 1px solid #EAECF0;
         background: white;
@@ -79,7 +103,12 @@ st.markdown(
     .project {
         font-weight: 750;
         color:#101828;
-        margin: 0.15rem 0 0.35rem;
+        margin: 0.12rem 0 0.35rem;
+    }
+    .project + .project {
+        margin-top: 0.85rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid rgba(16,24,40,.10);
     }
     .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
     .task.submission {font-weight: 700; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
@@ -642,6 +671,9 @@ def render_other_cell(rows):
 
 
 def render_week(start_date, end_date, work, meetings, others, visible_activities):
+    """Render one week as a single CSS grid so each lane row takes the
+    height of its tallest populated day. This keeps empty date cells aligned.
+    """
     days = []
     d = start_date
     while d <= end_date:
@@ -651,71 +683,93 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
     work_groups = group_items(work, "end_date")
     meeting_groups = group_items(meetings, "activity_date")
 
-    # Other grouping intentionally ignores project.
     other_groups = {}
     if not others.empty:
         for _, row in others.iterrows():
             d = parse_date(row["activity_date"])
             other_groups.setdefault(d, []).append(row)
 
+    week_no = ((start_date.day - 1) // 7) + 1
     st.markdown(
-        f'<div class="week-title">WEEK • {start_date.strftime("%d %b")} – '
+        f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
         f'{end_date.strftime("%d %b %Y")}</div>',
         unsafe_allow_html=True,
     )
 
-    # CSS grid: lane + up to 7 days.
-    cols = st.columns(len(days) + 1, gap="small")
-    with cols[0]:
-        st.markdown('<div class="day-head">ACTIVITY</div>', unsafe_allow_html=True)
-    for i, d in enumerate(days, start=1):
-        with cols[i]:
-            st.markdown(
-                f'<div class="day-head"><div class="dow">{fmt_day(d)}</div>'
-                f'<div class="day">{d.strftime("%d %b")}</div></div>',
-                unsafe_allow_html=True,
-            )
+    grid = []
+    # Header row
+    grid.append('<div class="schedule-head activity-head">ACTIVITY</div>')
+    for d in days:
+        grid.append(
+            f'<div class="schedule-head"><div class="dow">{fmt_day(d)}</div>'
+            f'<div class="day">{d.strftime("%d %b")}</div></div>'
+        )
 
     lane_specs = [("WORK", "work"), ("MEETING", "meeting"), ("OTHER", "other")]
     lane_specs = [x for x in lane_specs if x[1] in visible_activities]
 
     for lane_name, lane_type in lane_specs:
-        cols = st.columns(len(days) + 1, gap="small")
-        with cols[0]:
-            st.markdown(
-                f'<div class="lane-label {lane_type}-lane">{lane_name}</div>',
-                unsafe_allow_html=True,
-            )
+        grid.append(
+            f'<div class="lane-label {lane_type}-lane">{lane_name}</div>'
+        )
 
-        for i, d in enumerate(days, start=1):
-            with cols[i]:
-                if lane_type == "work":
-                    # All project groups for the day, sorted by project.
-                    rows = []
-                    for (gd, pid), items in work_groups.items():
-                        if gd == d:
-                            rows.extend(items)
-                    st.markdown(
-                        f'<div class="cell work-cell">{render_work_cell(rows)}</div>',
-                        unsafe_allow_html=True,
-                    )
+        for d in days:
+            if lane_type == "work":
+                rows = []
+                for (gd, pid), items in work_groups.items():
+                    if gd == d:
+                        rows.extend(items)
+                content = render_work_cell(rows)
+                css_class = "cell work-cell"
+            elif lane_type == "meeting":
+                rows = []
+                for (gd, pid), items in meeting_groups.items():
+                    if gd == d:
+                        rows.extend(items)
+                content = render_meeting_cell(rows)
+                css_class = "cell meeting-cell"
+            else:
+                content = render_other_cell(other_groups.get(d, []))
+                css_class = "cell other-cell"
 
-                elif lane_type == "meeting":
-                    rows = []
-                    for (gd, pid), items in meeting_groups.items():
-                        if gd == d:
-                            rows.extend(items)
-                    st.markdown(
-                        f'<div class="cell meeting-cell">{render_meeting_cell(rows)}</div>',
-                        unsafe_allow_html=True,
-                    )
+            grid.append(f'<div class="{css_class}">{content}</div>')
 
-                else:
-                    rows = other_groups.get(d, [])
-                    st.markdown(
-                        f'<div class="cell other-cell">{render_other_cell(rows)}</div>',
-                        unsafe_allow_html=True,
-                    )
+    st.markdown(
+        f'<div class="schedule-grid" style="grid-template-columns: minmax(105px, .8fr) repeat({len(days)}, minmax(135px, 1fr));">' + ''.join(grid) + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+
+def checklist_filter(label, options, all_label, key_prefix, format_func=None):
+    """Compact checklist filter. When All is selected, individual options are
+    intentionally hidden. When All is cleared, individual checkboxes appear.
+    Returns (effective_selection, all_selected).
+    """
+    all_key = f"{key_prefix}_all"
+    if all_key not in st.session_state:
+        st.session_state[all_key] = True
+
+    for opt in options:
+        key = f"{key_prefix}_{opt}"
+        if key not in st.session_state:
+            st.session_state[key] = False
+
+    selected = []
+    with st.popover(label, use_container_width=True):
+        all_selected = st.checkbox(all_label, key=all_key)
+        if all_selected:
+            st.caption("All selected")
+        else:
+            for opt in options:
+                key = f"{key_prefix}_{opt}"
+                text = format_func(opt) if format_func else opt
+                if st.checkbox(text, key=key):
+                    selected.append(opt)
+
+    if st.session_state[all_key]:
+        return list(options), True
+    return selected, False
 
 
 def weekly_dashboard():
@@ -762,7 +816,7 @@ def weekly_dashboard():
             unsafe_allow_html=True,
         )
 
-        c1, c2, c3, c4, c5 = st.columns([1.0, .8, 1.7, 1.1, 1.15])
+        c1, c2, c3, c4, c5 = st.columns([1.0, .8, 1.55, 1.05, 1.1])
         with c1:
             selected_month_no = st.selectbox(
                 "MONTH", range(1, 13), index=date.today().month - 1,
@@ -771,37 +825,39 @@ def weekly_dashboard():
         with c2:
             default_year_index = years.index(date.today().year) if date.today().year in years else len(years) - 1
             selected_year = st.selectbox("YEAR", years, index=default_year_index, key="dash_year")
+
+        selected_month = date(selected_year, selected_month_no, 1)
+        weeks = month_weeks(selected_month.year, selected_month.month)
+
         with c3:
-            selected_projects = st.multiselect(
+            selected_projects, project_all = checklist_filter(
                 "PROJECT",
-                project_options,
-                default=["All"],
-                placeholder="Select project(s)",
+                projects["id"].tolist() if not projects.empty else [],
+                "All Projects",
+                "dash_project",
                 format_func=lambda x: (
-                    "All Projects" if x == "All" else
                     f"{x} | {projects.loc[projects['id'].eq(x), 'name'].iloc[0]}"
                     if not projects.loc[projects['id'].eq(x)].empty else x
                 ),
-                key="dash_projects",
             )
         with c4:
-            selected_month = date(selected_year, selected_month_no, 1)
-            weeks = month_weeks(selected_month.year, selected_month.month)
-            week_options = ["All"] + [f"Week {i+1} ({w[0].strftime('%d')}–{w[1].strftime('%d %b')})" for i, w in enumerate(weeks)]
+            week_options = ["All"] + [
+                f"Week {i+1} ({w[0].strftime('%d')}–{w[1].strftime('%d %b')})"
+                for i, w in enumerate(weeks)
+            ]
             selected_week = st.selectbox("WEEK", week_options, key="dash_week")
         with c5:
-            activity_options = ["All", "Work", "Meeting", "Other"]
-            selected_activity = st.multiselect(
-                "ACTIVITY", activity_options, default=["All"],
-                placeholder="Select activity", key="dash_activity"
+            selected_activity, activity_all = checklist_filter(
+                "ACTIVITY",
+                ["Work", "Meeting", "Other"],
+                "All",
+                "dash_activity",
             )
 
-        st.markdown('<div class="activity-filter-note">PROJECT and ACTIVITY support multiple selections. "All" shows everything.</div>', unsafe_allow_html=True)
-
-        # All is the default/master selection; if it is present, show everything.
-        project_filter = "All Projects" if (not selected_projects or "All" in selected_projects) else selected_projects
-
-        if not selected_activity or "All" in selected_activity:
+        # Effective filters. Empty individual selection is treated as All to
+        # avoid an accidental blank dashboard after clearing the checklist.
+        project_filter = "All Projects" if project_all or not selected_projects else selected_projects
+        if activity_all or not selected_activity:
             visible_activities = {"work", "meeting", "other"}
         else:
             visible_activities = {x.lower() for x in selected_activity}
