@@ -34,49 +34,136 @@ st.markdown(
     """
     <style>
     .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
-    .st-key-weekly-dashboard-header {position: sticky; top: 0; z-index: 1000; background: rgba(255,255,255,.98); padding: .15rem 0 .85rem; margin-top: -.35rem; border-bottom: 1px solid #E4E7EC; box-shadow: 0 5px 16px rgba(16,24,40,.06); backdrop-filter: blur(10px);}
+    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {
+        position: -webkit-sticky !important; position: sticky !important; top: 0 !important;
+        z-index: 1000 !important; background: rgba(255,255,255,.98) !important;
+        padding: .15rem 0 .85rem !important; margin-bottom: .35rem !important;
+        border-bottom: 1px solid #D0D5DD !important;
+        box-shadow: 0 6px 14px rgba(16,24,40,.07) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    #weekly-dashboard-anchor {height: 0; overflow: hidden;}
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
-    .brand {font-size:.88rem; font-weight:800; letter-spacing:.04em; color:#182B49; margin-bottom:.1rem;}
-    .app-title {font-size: 2.05rem; font-weight: 800; line-height:1.05; color:#10213F; margin-bottom:0.12rem;}
-    .app-subtitle {color:#667085; margin-bottom:.85rem; font-size:.82rem;}
+
+    /* Filter bar — intentionally compact and visually consistent with the mockup. */
+    div[data-testid="stHorizontalBlock"] .stSelectbox > label,
+    div[data-testid="stHorizontalBlock"] .stPopover > button + div {font-weight:600;}
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div,
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        min-height:42px !important;
+        border-radius:9px !important;
+        border:1px solid #E2E8F0 !important;
+        background:#F5F8FC !important;
+        box-shadow:none !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
+    div[data-testid="stHorizontalBlock"] .stPopover > button:hover {
+        border-color:#B8C7DA !important;
+        background:#F0F5FA !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] > div {
+        min-height:42px !important;
+        border:0 !important;
+        background:transparent !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        width:100% !important;
+        justify-content:flex-start !important;
+        color:#172B4D !important;
+        font-weight:600 !important;
+        padding:0 .8rem !important;
+    }
+    .filter-label {
+        font-size:.74rem; font-weight:700; color:#475467;
+        margin:0 0 .28rem .05rem; letter-spacing:.02em;
+    }
+    .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
+    .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
+    .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
-        font-size: 1.28rem; font-weight: 850; padding: .78rem .7rem;
-        text-align:center; color:#10213F; background:#F7F9FC; margin-top: 1rem;
-        border-top:1px solid #EAECF0; border-bottom:1px solid #EAECF0;
+        font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
+        border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
+        text-align: center; color:#172B4D; letter-spacing:.01em;
     }
     .schedule-grid {
-        display:grid; grid-template-columns:minmax(135px, .8fr) repeat(7,minmax(145px,1fr));
-        align-items:stretch; gap:7px; width:100%; overflow-x:auto;
-        background:#FFFFFF;
+        display: grid;
+        grid-template-columns: minmax(105px, .8fr) repeat(7, minmax(135px, 1fr));
+        align-items: stretch;
+        gap: 0;
+        width: 100%;
+        overflow-x: auto;
+        border-left: 1px solid #EAECF0;
+        border-top: 1px solid #EAECF0;
+        border-radius: 0 0 8px 8px;
     }
-    .schedule-head {min-height:58px; padding:.55rem .3rem; font-weight:750; text-align:center; background:#F7F9FC; border:1px solid #E4E7EC; border-radius:7px; color:#14233D;}
+    .schedule-head {
+        min-height: 58px;
+        padding: 0.45rem 0.3rem;
+        font-weight: 700;
+        text-align: center;
+        background: #F8FAFC;
+        border-right: 1px solid #EAECF0;
+        border-bottom: 1px solid #D0D5DD;
+    }
     .activity-head {display:flex;align-items:center;justify-content:center;}
     .schedule-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
     .schedule-head .day {font-size: 1rem; color:#101828;}
-    .lane-label {min-height:130px; padding:1rem .7rem; font-weight:850; font-size:.88rem; letter-spacing:.03em; color:#10213F; border:1px solid #E4E7EC; border-radius:7px;}
+    .lane-label {
+        min-height: 130px;
+        padding: 0.75rem 0.55rem;
+        font-weight: 800;
+        font-size: 0.78rem;
+        letter-spacing: .04em;
+        border-right: 1px solid #D0D5DD;
+        color:#344054;
+    }
     .lane-label.work-lane {background:#E8F3FF;}
     .lane-label.meeting-lane {background:#FFF7D6;}
     .lane-label.other-lane {background:#F2E9FF;}
     .cell.work-cell {background:#F4FAFF;}
     .cell.meeting-cell {background:#FFFBEA;}
+    .meeting-cell .project {color:#1F2937;}
+    .meeting-cell .task {color:#172B4D; font-weight:650;}
+    .meeting-cell .meta {color:#475467; font-weight:500;}
+    .work-cell .project, .other-cell .other-item {color:#172B4D;}
     .cell.other-cell {background:#FAF5FF;}
-    .cell {min-height:130px; padding:.62rem; border:1px solid #E4E7EC; border-radius:7px; background:white;}
-    .project {font-weight:850; color:#10213F; margin:.1rem 0 .38rem; font-size:.82rem;}
+    .cell {
+        min-height: 130px;
+        padding: 0.55rem;
+        border-right: 1px solid #EAECF0;
+        border-bottom: 1px solid #EAECF0;
+        background: white;
+    }
+    .project {
+        font-weight: 750;
+        color:#101828;
+        margin: 0.12rem 0 0.35rem;
+    }
     .project + .project {
         margin-top: 0.85rem;
         padding-top: 0.55rem;
         border-top: 1px solid rgba(16,24,40,.10);
     }
-    .task {font-size:.81rem; line-height:1.4; margin:.27rem 0; color:#182B49; font-weight:560;}
-    .task.submission {font-weight:800; color:#C62828; background:#FFE6E6; border-radius:6px; padding:3px 6px;}
-    .sign {color:#D92D20; font-weight:950; margin-left:.25rem;}
-    .meta {margin-left:1.05rem; font-size:.72rem; color:#53627A; line-height:1.35; font-weight:520;}
+    .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
+    .task.submission {font-weight: 700; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
+    .sign {color:#D92D20; font-weight: 900; margin-left: 0.2rem;}
+    .meta {
+        margin-left: 1.05rem;
+        font-size: 0.73rem;
+        color:#667085;
+        line-height: 1.3;
+    }
     .other-item {
         font-size: 0.79rem;
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .kpi {padding:.8rem 1rem; border:1px solid #E4E7EC; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(16,24,40,.03);}
+    .kpi {
+        padding: 0.8rem 1rem;
+        border: 1px solid #EAECF0;
+        border-radius: 10px;
+        background: white;
+    }
     .kpi-label {font-size:.72rem;color:#667085;text-transform:uppercase;}
     .kpi-value {font-size:1.35rem;font-weight:750;color:#101828;}
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
@@ -546,7 +633,7 @@ def render_work_cell(rows):
         pic = html.escape(clean(row.get("pic")))
         activity_type = clean(row.get("activity_type")).lower()
 
-        sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
+        sign = '<span class="sign">▲!</span>' if activity_type == "submission" else ""
         pic_html = f" <span style='color:#667085'>({pic})</span>" if pic else ""
 
         chunks.append(
@@ -636,8 +723,10 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
             d = parse_date(row["activity_date"])
             other_groups.setdefault(d, []).append(row)
 
+    week_no = ((start_date.day - 1) // 7) + 1
     st.markdown(
-        f'<div class="week-title">WEEK {((start_date.day - 1) // 7) + 1} • {start_date.strftime("%d %b")} – {end_date.strftime("%d %b %Y")}</div>',
+        f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
+        f'{end_date.strftime("%d %b %Y")}</div>',
         unsafe_allow_html=True,
     )
 
@@ -687,9 +776,10 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
 
 def checklist_filter(label, options, all_label, key_prefix, format_func=None):
-    """Compact checklist filter. When All is selected, individual options are
-    intentionally hidden. When All is cleared, individual checkboxes appear.
-    Returns (effective_selection, all_selected).
+    """Popover-based multi-select filter.
+
+    UX rule: All is mutually exclusive. While All is active, individual
+    choices are hidden. Clearing All reveals the individual checkboxes.
     """
     all_key = f"{key_prefix}_all"
     if all_key not in st.session_state:
@@ -700,21 +790,32 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
         if key not in st.session_state:
             st.session_state[key] = False
 
-    selected = []
-    with st.popover(label, use_container_width=True):
+    # If all is selected, clear individual selections so the state is clean.
+    if st.session_state[all_key]:
+        for opt in options:
+            st.session_state[f"{key_prefix}_{opt}"] = False
+
+    chosen = [opt for opt in options if st.session_state[f"{key_prefix}_{opt}"]]
+    if st.session_state[all_key]:
+        summary = all_label
+    elif not chosen:
+        summary = "None"
+    elif len(chosen) == 1:
+        summary = format_func(chosen[0]) if format_func else chosen[0]
+    else:
+        summary = f"{len(chosen)} selected"
+
+    with st.popover(f"{label}  ·  {summary}", use_container_width=True):
         all_selected = st.checkbox(all_label, key=all_key)
         if all_selected:
             st.caption("All selected")
         else:
             for opt in options:
-                key = f"{key_prefix}_{opt}"
                 text = format_func(opt) if format_func else opt
-                if st.checkbox(text, key=key):
-                    selected.append(opt)
+                st.checkbox(text, key=f"{key_prefix}_{opt}")
 
-    if st.session_state[all_key]:
-        return list(options), True
-    return selected, False
+    selected = [opt for opt in options if st.session_state[f"{key_prefix}_{opt}"]]
+    return (list(options), True) if st.session_state[all_key] else (selected, False)
 
 
 def weekly_dashboard():
@@ -751,9 +852,9 @@ def weekly_dashboard():
     # ========================================================
     # STICKY DASHBOARD HEADER
     # ========================================================
-    header = st.container(key="weekly_dashboard_header")
+    header = st.container()
     with header:
-        st.markdown('<div class="brand">STUDIO ASIA RAYA</div>', unsafe_allow_html=True)
+        st.markdown('<div id="weekly-dashboard-anchor"></div>', unsafe_allow_html=True)
         st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
         st.markdown(
             '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
@@ -761,22 +862,23 @@ def weekly_dashboard():
             unsafe_allow_html=True,
         )
 
-        c1, c2, c3, c4, c5 = st.columns([1.0, .8, 1.55, 1.05, 1.1])
+        c1, c2, c3, c4, c5 = st.columns([1.05, .82, 1.55, 1.15, 1.15], gap="small")
         with c1:
             selected_month_no = st.selectbox(
                 "MONTH", range(1, 13), index=date.today().month - 1,
-                format_func=lambda x: month_names[x - 1], key="dash_month"
+                format_func=lambda x: f"📅  {month_names[x - 1]}", key="dash_month"
             )
         with c2:
             default_year_index = years.index(date.today().year) if date.today().year in years else len(years) - 1
-            selected_year = st.selectbox("YEAR", years, index=default_year_index, key="dash_year")
+            selected_year = st.selectbox("YEAR", years, index=default_year_index,
+                                         format_func=lambda x: f"📅  {x}", key="dash_year")
 
         selected_month = date(selected_year, selected_month_no, 1)
         weeks = month_weeks(selected_month.year, selected_month.month)
 
         with c3:
             selected_projects, project_all = checklist_filter(
-                "PROJECT",
+                "📁 PROJECT",
                 projects["id"].tolist() if not projects.empty else [],
                 "All Projects",
                 "dash_project",
@@ -793,7 +895,7 @@ def weekly_dashboard():
             selected_week = st.selectbox("WEEK", week_options, key="dash_week")
         with c5:
             selected_activity, activity_all = checklist_filter(
-                "ACTIVITY",
+                "▱ ACTIVITY",
                 ["Work", "Meeting", "Other"],
                 "All",
                 "dash_activity",
