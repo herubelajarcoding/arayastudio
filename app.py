@@ -168,14 +168,90 @@ st.markdown(
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .kpi {
-        padding: 0.8rem 1rem;
-        border: 1px solid #EAECF0;
-        border-radius: 10px;
-        background: white;
+    /* KPI cards — visual enhancement only; filter/dashboard layout remains unchanged. */
+    .kpi-row {
+        display:grid;
+        grid-template-columns:repeat(4,minmax(0,1fr));
+        gap:16px;
+        width:100%;
+        margin:0.35rem 0 0.25rem;
     }
-    .kpi-label {font-size:.72rem;color:#667085;text-transform:uppercase;}
-    .kpi-value {font-size:1.35rem;font-weight:750;color:#101828;}
+    .kpi {
+        position:relative;
+        min-height:118px;
+        padding:18px 20px;
+        border:1px solid rgba(16,24,40,.07);
+        border-radius:15px;
+        overflow:hidden;
+        box-shadow:0 3px 12px rgba(16,24,40,.055);
+        display:flex;
+        align-items:center;
+        gap:17px;
+    }
+    .kpi::before {
+        content:"";
+        position:absolute;
+        width:112px;
+        height:112px;
+        right:-32px;
+        top:-43px;
+        border-radius:50%;
+        background:rgba(255,255,255,.38);
+    }
+    .kpi::after {
+        content:"";
+        position:absolute;
+        width:155px;
+        height:155px;
+        right:-48px;
+        bottom:-92px;
+        border-radius:50%;
+        background:rgba(255,255,255,.30);
+    }
+    .kpi.work {background:linear-gradient(135deg,#EAF4FF 0%,#DCEEFF 100%);}
+    .kpi.meeting {background:linear-gradient(135deg,#FFF9DF 0%,#FFF1B9 100%);}
+    .kpi.submission {background:linear-gradient(135deg,#FFF0F1 0%,#FFE0E3 100%);}
+    .kpi.other {background:linear-gradient(135deg,#F4ECFF 0%,#E9DDFF 100%);}
+    .kpi-icon {
+        position:relative;
+        z-index:2;
+        width:52px;
+        height:52px;
+        min-width:52px;
+        border-radius:14px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    .kpi.work .kpi-icon {background:#1479E9;color:#fff;}
+    .kpi.meeting .kpi-icon {background:#F5B400;color:#fff;}
+    .kpi.submission .kpi-icon {background:#EF4444;color:#fff;}
+    .kpi.other .kpi-icon {background:#8B5CF6;color:#fff;}
+    .kpi-content {position:relative;z-index:2;}
+    .kpi-label {
+        font-size:.74rem;
+        line-height:1.2;
+        font-weight:800;
+        letter-spacing:.025em;
+        text-transform:uppercase;
+        margin-bottom:6px;
+    }
+    .kpi.work .kpi-label {color:#1479E9;}
+    .kpi.meeting .kpi-label {color:#C88A00;}
+    .kpi.submission .kpi-label {color:#E33A40;}
+    .kpi.other .kpi-label {color:#7040D8;}
+    .kpi-value {
+        font-size:2rem;
+        line-height:1;
+        font-weight:850;
+        color:#102A56;
+    }
+    @media (max-width: 900px) {
+        .kpi-row {grid-template-columns:repeat(2,minmax(0,1fr));}
+    }
+    @media (max-width: 560px) {
+        .kpi-row {grid-template-columns:1fr;}
+    }
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
     </style>
     """,
@@ -935,20 +1011,39 @@ def weekly_dashboard():
             meetings = meetings[meetings["project_id"].isin(selected_projects)].copy()
             # Other intentionally remains independent of project filter.
 
-        # KPI strip reflects the visible activity filter.
-        k = st.columns(4)
-        kpi_values = [
-            ("WORK ITEMS", len(work) if "work" in visible_activities else 0),
-            ("MEETINGS", len(meetings) if "meeting" in visible_activities else 0),
-            ("SUBMISSIONS", int((work["activity_type"].str.lower() == "submission").sum()) if "work" in visible_activities and not work.empty else 0),
-            ("OTHER ACTIVITIES", len(others) if "other" in visible_activities else 0),
+        # KPI strip — visual only; values and filter logic are unchanged.
+        work_count = len(work) if "work" in visible_activities else 0
+        meeting_count = len(meetings) if "meeting" in visible_activities else 0
+        submission_count = (
+            int((work["activity_type"].str.lower() == "submission").sum())
+            if "work" in visible_activities and not work.empty else 0
+        )
+        other_count = len(others) if "other" in visible_activities else 0
+
+        icon_work = '''<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M15 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>'''
+        icon_meeting = '''<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="4"/><circle cx="17" cy="9" r="3"/><path d="M2.5 21c.3-4 2.6-6 6.5-6s6.2 2 6.5 6z"/><path d="M14.5 15.5c3.2.1 5 1.8 5.5 4.5h-4.2c-.2-1.7-.6-3.1-1.3-4.5z"/></svg>'''
+        icon_submission = '''<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="6" r="1.2" fill="currentColor"/><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="5" cy="18" r="1.2" fill="currentColor"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>'''
+        icon_other = '''<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r="1.25" fill="white"/><circle cx="12" cy="12" r="1.25" fill="white"/><circle cx="16" cy="12" r="1.25" fill="white"/></svg>'''
+
+        cards = [
+            ("work", "WORK ITEMS", work_count, icon_work),
+            ("meeting", "MEETINGS", meeting_count, icon_meeting),
+            ("submission", "SUBMISSIONS", submission_count, icon_submission),
+            ("other", "OTHER ACTIVITIES", other_count, icon_other),
         ]
-        for col, (label, value) in zip(k, kpi_values):
-            with col:
-                st.markdown(
-                    f'<div class="kpi"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>',
-                    unsafe_allow_html=True,
-                )
+
+        cards_html = '<div class="kpi-row">'
+        for css_class, label, value, icon in cards:
+            cards_html += (
+                f'<div class="kpi {css_class}">'
+                f'<div class="kpi-icon">{icon}</div>'
+                f'<div class="kpi-content">'
+                f'<div class="kpi-label">{label}</div>'
+                f'<div class="kpi-value">{value}</div>'
+                f'</div></div>'
+            )
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
     selected_weeks = list(enumerate(weeks, start=1))
     if selected_week != "All":
         idx = int(selected_week.split()[1])
