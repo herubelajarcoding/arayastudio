@@ -152,6 +152,18 @@ st.markdown(
     .activity-head {display:flex;align-items:center;justify-content:center;}
     .schedule-head .dow {font-size: 0.72rem; color:#667085; text-transform:uppercase;}
     .schedule-head .day {font-size: 1rem; color:#101828;}
+    .schedule-head.non-working-day {
+        background:#ECFDF3 !important;
+        border-color:#ABEFC6 !important;
+    }
+    .schedule-head.non-working-day .dow,
+    .schedule-head.non-working-day .day {
+        color:#067647 !important;
+        font-weight:800 !important;
+    }
+    .schedule-head.non-working-day .date-detail-link:hover {
+        background:#D1FADF !important;
+    }
     .lane-label {
         min-height: 150px;
         padding: 0.9rem 0.45rem;
@@ -681,6 +693,88 @@ def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
+# ============================================================
+# INDONESIA HOLIDAY CALENDAR
+# ============================================================
+# 2026: official national holidays + collective leave based on
+# SKB 3 Menteri No. 5 Tahun 2025 / related official 2026 guidance.
+# 2027: provisional public-calendar dates; update when the official
+# SKB 3 Menteri for 2027 is issued.
+#
+# Sundays are handled separately as weekly holidays.
+HOLIDAYS = {
+    2026: {
+        # National holidays
+        "2026-01-01": "Tahun Baru Masehi",
+        "2026-01-16": "Isra Mikraj Nabi Muhammad SAW",
+        "2026-02-17": "Tahun Baru Imlek 2577 Kongzili",
+        "2026-03-19": "Hari Suci Nyepi 1948 Saka",
+        "2026-03-21": "Hari Raya Idul Fitri 1447 H",
+        "2026-03-22": "Hari Raya Idul Fitri 1447 H",
+        "2026-04-03": "Wafat Yesus Kristus",
+        "2026-04-05": "Hari Kebangkitan Yesus Kristus",
+        "2026-05-01": "Hari Buruh Internasional",
+        "2026-05-14": "Kenaikan Yesus Kristus",
+        "2026-05-27": "Hari Raya Idul Adha 1447 H",
+        "2026-05-31": "Hari Raya Waisak 2570 BE",
+        "2026-06-01": "Hari Lahir Pancasila",
+        "2026-06-16": "Tahun Baru Islam 1448 H",
+        "2026-08-17": "Hari Proklamasi Kemerdekaan RI",
+        "2026-08-25": "Maulid Nabi Muhammad SAW",
+        "2026-12-25": "Kelahiran Yesus Kristus",
+        # Collective leave
+        "2026-02-16": "Cuti Bersama Imlek",
+        "2026-03-18": "Cuti Bersama Nyepi",
+        "2026-03-20": "Cuti Bersama Idul Fitri",
+        "2026-03-23": "Cuti Bersama Idul Fitri",
+        "2026-03-24": "Cuti Bersama Idul Fitri",
+        "2026-05-15": "Cuti Bersama Kenaikan Yesus Kristus",
+        "2026-05-28": "Cuti Bersama Idul Adha",
+        "2026-12-24": "Cuti Bersama Natal",
+    },
+    2027: {
+        # Provisional public-calendar dates. These are intentionally
+        # kept in code so they can be replaced when the official SKB
+        # 3 Menteri 2027 is released.
+        "2027-01-01": "Tahun Baru Masehi",
+        "2027-01-05": "Isra Mikraj Nabi Muhammad SAW",
+        "2027-02-06": "Tahun Baru Imlek 2578 Kongzili",
+        "2027-03-09": "Hari Suci Nyepi / Idul Fitri (provisional)",
+        "2027-03-10": "Hari Raya Idul Fitri 1448 H (provisional)",
+        "2027-03-26": "Wafat Yesus Kristus",
+        "2027-03-28": "Hari Kebangkitan Yesus Kristus",
+        "2027-05-01": "Hari Buruh Internasional",
+        "2027-05-06": "Kenaikan Yesus Kristus",
+        "2027-05-17": "Hari Raya Idul Adha 1448 H (provisional)",
+        "2027-05-20": "Hari Raya Waisak 2571 BE (provisional)",
+        "2027-06-01": "Hari Lahir Pancasila",
+        "2027-06-06": "Tahun Baru Islam 1449 H (provisional)",
+        "2027-08-15": "Maulid Nabi Muhammad SAW (provisional)",
+        "2027-08-17": "Hari Proklamasi Kemerdekaan RI",
+        "2027-12-25": "Kelahiran Yesus Kristus",
+        # Provisional collective leave
+        "2027-02-05": "Cuti Bersama Imlek (provisional)",
+        "2027-03-08": "Cuti Bersama Idul Fitri (provisional)",
+        "2027-03-11": "Cuti Bersama Idul Fitri (provisional)",
+        "2027-03-12": "Cuti Bersama Idul Fitri (provisional)",
+        "2027-05-07": "Cuti Bersama Kenaikan Yesus Kristus (provisional)",
+        "2027-05-18": "Cuti Bersama Idul Adha (provisional)",
+        "2027-05-21": "Cuti Bersama Waisak (provisional)",
+        "2027-12-24": "Cuti Bersama Natal (provisional)",
+    },
+}
+
+
+def holiday_info(d):
+    """Return (is_non_working_day, label) for Sundays or listed holidays."""
+    if d.weekday() == 6:
+        return True, "Minggu"
+    label = HOLIDAYS.get(d.year, {}).get(d.isoformat())
+    if label:
+        return True, label
+    return False, ""
+
+
 def fmt_day(d):
     return d.strftime("%a")
 
@@ -1033,10 +1127,13 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
     # Header row
     grid.append('<div class="schedule-head activity-head">ACTIVITY</div>')
     for d in days:
+        is_non_working, holiday_label = holiday_info(d)
+        holiday_class = " non-working-day" if is_non_working else ""
+        title = holiday_label if holiday_label else d.strftime("%d %b %Y")
         grid.append(
-            f'<div class="schedule-head">'
+            f'<div class="schedule-head{holiday_class}">'
             f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" target="_self" '
-            f'title="View all activities for {d.strftime("%d %b %Y")}">'
+            f'title="{html.escape(title)}">'
             f'<div class="dow">{fmt_day(d)}</div>'
             f'<div class="day">{d.strftime("%d %b")}</div>'
             f'</a></div>'
