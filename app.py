@@ -223,7 +223,21 @@ st.markdown(
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
+        /* V2n: visual separator between project groups in the dashboard. */
+    .project {
+        font-weight:700;
+        color:#172B4D;
+        margin-top:.28rem;
+        margin-bottom:.16rem;
+        padding-top:.38rem;
+        border-top:1px solid #D0D5DD;
+    }
+    .project:first-child {
+        border-top:none;
+        padding-top:0;
+        margin-top:0;
+    }
+.more-items {font-size:.75rem; font-weight:700; color:#667085; margin:.35rem 0 .15rem 1.05rem;}
     .detail-date {font-size:1rem; font-weight:700; color:#344054; margin:-.25rem 0 1rem;}
         .detail-submission {
         background:#FEE4E2 !important;
