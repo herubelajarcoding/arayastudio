@@ -68,10 +68,20 @@ st.markdown(
     }
     div[data-testid="stHorizontalBlock"] .stPopover > button {
         width:100% !important;
+        min-height:42px !important;
         justify-content:flex-start !important;
         color:#172B4D !important;
         font-weight:600 !important;
         padding:0 .8rem !important;
+        border-radius:9px !important;
+        border:1px solid #E2E8F0 !important;
+        background:#F5F8FC !important;
+        box-shadow:none !important;
+    }
+    div[data-testid="stHorizontalBlock"] .stPopover > button p {
+        font-size:.83rem !important;
+        font-weight:600 !important;
+        color:#172B4D !important;
     }
     .filter-label {
         font-size:.74rem; font-weight:700; color:#475467;
@@ -805,7 +815,10 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
     else:
         summary = f"{len(chosen)} selected"
 
-    with st.popover(f"{label}  ·  {summary}", use_container_width=True):
+    # Keep the label outside the control so Project/Activity align vertically
+    # with the native Month/Year/Week selectboxes.
+    st.markdown(f'<div class="filter-label">{html.escape(label)}</div>', unsafe_allow_html=True)
+    with st.popover(summary, use_container_width=True):
         all_selected = st.checkbox(all_label, key=all_key)
         if all_selected:
             st.caption("All selected")
