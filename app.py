@@ -153,7 +153,7 @@ st.markdown(
     .cell.work-cell {background:#F4FAFF;}
     .cell.meeting-cell {background:#FFFBEA;}
     .meeting-cell .project {color:#1F2937;}
-    .meeting-cell .task {color:#172B4D; font-weight:650;}
+    .meeting-cell .task {color:#111111; font-weight:400;}
     .meeting-cell .meta {color:#475467; font-weight:500;}
     .work-cell .project, .other-cell .other-item {color:#172B4D;}
     .cell.other-cell {background:#FAF5FF;}
@@ -175,7 +175,7 @@ st.markdown(
         padding-top: 0.62rem;
         border-top: 1px solid rgba(16,24,40,.13);
     }
-    .task {font-size: 0.82rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
+    .task {font-size: 0.88rem; line-height: 1.42; margin: 0.28rem 0; color:#111111; font-weight:400;}
     .task.submission {font-weight: 750; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
     .sign {color:#D92D20; font-weight: 950; margin-left: 0.2rem; letter-spacing:-.08em;}
     .meta {
@@ -752,7 +752,7 @@ def render_work_cell(rows):
         activity_type = clean(row.get("activity_type")).lower()
 
         sign = '<span class="sign">!!</span>' if activity_type == "submission" else ""
-        pic_html = f" <span style='color:#667085'>({pic})</span>" if pic else ""
+        pic_html = f" <span style='color:#475467'>({pic.upper()})</span>" if pic else ""
 
         chunks.append(
             f'<div class="task {"submission" if activity_type == "submission" else ""}">'
@@ -786,7 +786,7 @@ def render_meeting_cell(rows):
             clean(row.get("attendee_3")),
             clean(row.get("attendee_4")),
         ]
-        attendees = ", ".join([a for a in attendees if a])
+        attendees = ", ".join([a.upper() for a in attendees if a])
 
         chunks.append(
             '<div class="task">• '
@@ -823,7 +823,7 @@ def render_other_cell(rows):
     return "".join(chunks)
 
 
-def render_week(start_date, end_date, work, meetings, others, visible_activities):
+def render_week(start_date, end_date, work, meetings, others, visible_activities, week_no=None):
     """Render one week as a single CSS grid so each lane row takes the
     height of its tallest populated day. This keeps empty date cells aligned.
     """
@@ -842,7 +842,8 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
             d = parse_date(row["activity_date"])
             other_groups.setdefault(d, []).append(row)
 
-    week_no = ((start_date.day - 1) // 7) + 1
+    if week_no is None:
+        week_no = 1
     st.markdown(
         f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
         f'{end_date.strftime("%d %b %Y")}</div>',
@@ -1098,7 +1099,7 @@ def weekly_dashboard():
         if "other" not in visible_activities:
             o = o.iloc[0:0]
 
-        render_week(week_start, week_end, w, m, o, visible_activities)
+        render_week(week_start, week_end, w, m, o, visible_activities, week_no=_)
 
 
 # ============================================================
