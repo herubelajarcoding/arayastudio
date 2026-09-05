@@ -34,16 +34,33 @@ st.markdown(
     """
     <style>
     .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
-    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {
-        position: -webkit-sticky !important; position: sticky !important; top: 0 !important;
-        z-index: 1000 !important; background: rgba(255,255,255,.98) !important;
-        padding: .15rem 0 .85rem !important; margin-bottom: .35rem !important;
+    /* V2e: freeze the complete Weekly Dashboard header.
+       The anchor is inside the same Streamlit vertical block as:
+       title + subtitle + filters + KPI cards. */
+    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor) {
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 9999 !important;
+        background: rgba(255,255,255,.985) !important;
+        padding: .15rem 0 .85rem !important;
+        margin-bottom: .35rem !important;
         border-bottom: 1px solid #D0D5DD !important;
         box-shadow: 0 6px 14px rgba(16,24,40,.07) !important;
         backdrop-filter: blur(10px) !important;
     }
-    #weekly-dashboard-anchor {height: 0; overflow: hidden;}
+    #weekly-dashboard-anchor {
+        display:block !important;
+        height:0 !important;
+        min-height:0 !important;
+        overflow:hidden !important;
+        margin:0 !important;
+        padding:0 !important;
+    }
     .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
+    /* Keep the frozen block visually attached to the viewport top. */
+    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor)
+        > div:first-child { margin-top:0 !important; }
 
     /* Filter bar — intentionally compact and visually consistent with the mockup. */
     div[data-testid="stHorizontalBlock"] .stSelectbox > label,
