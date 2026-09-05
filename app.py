@@ -34,6 +34,9 @@ st.markdown(
     """
     <style>
     .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
+    #weekly-dashboard-sticky {position: sticky; top: 0; z-index: 1000; background: rgba(255,255,255,.97); padding: .2rem 0 .8rem; border-bottom: 1px solid #EAECF0; backdrop-filter: blur(8px);}
+    div[data-testid="stVerticalBlock"]:has(#weekly-dashboard-anchor) {position: sticky; top: 0; z-index: 999; background: rgba(255,255,255,.97); padding-bottom: .6rem; border-bottom: 1px solid #EAECF0; backdrop-filter: blur(8px);}
+    .activity-filter-note {font-size:.72rem;color:#667085;margin-top:-.35rem;margin-bottom:.25rem;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
     .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
@@ -60,6 +63,12 @@ st.markdown(
         border-right: 1px solid #D0D5DD;
         color:#344054;
     }
+    .lane-label.work-lane {background:#E8F3FF;}
+    .lane-label.meeting-lane {background:#FFF7D6;}
+    .lane-label.other-lane {background:#F2E9FF;}
+    .cell.work-cell {background:#F4FAFF;}
+    .cell.meeting-cell {background:#FFFBEA;}
+    .cell.other-cell {background:#FAF5FF;}
     .cell {
         min-height: 130px;
         padding: 0.45rem;
@@ -72,8 +81,8 @@ st.markdown(
         color:#101828;
         margin: 0.15rem 0 0.35rem;
     }
-    .task {font-size: 0.79rem; line-height: 1.35; margin: 0.22rem 0;}
-    .task.submission {font-weight: 650;}
+    .task {font-size: 0.80rem; line-height: 1.4; margin: 0.28rem 0; color:#172B4D;}
+    .task.submission {font-weight: 700; color:#C62828; background:#FFE7E7; border-radius:6px; padding:2px 5px;}
     .sign {color:#D92D20; font-weight: 900; margin-left: 0.2rem;}
     .meta {
         margin-left: 1.05rem;
@@ -512,10 +521,14 @@ def month_weeks(year, month):
     first = date(year, month, 1)
     last = date(year, month, calendar.monthrange(year, month)[1])
 
-    # Same weekly model as the Excel dashboard: first week starts on
-    # the first day of the month; subsequent weeks are 7-day blocks.
+    # Studio calendar convention: Week 1 runs from the 1st of the month
+    # through the first Sunday; subsequent weeks run Monday-Sunday.
     weeks = []
     current = first
+    first_end = min(first + timedelta(days=(6 - first.weekday())), last)
+    weeks.append((first, first_end))
+    current = first_end + timedelta(days=1)
+
     while current <= last:
         week_end = min(current + timedelta(days=6), last)
         weeks.append((current, week_end))
@@ -628,7 +641,7 @@ def render_other_cell(rows):
     return "".join(chunks)
 
 
-def render_week(start_date, end_date, work, meetings, others):
+def render_week(start_date, end_date, work, meetings, others, visible_activities):
     days = []
     d = start_date
     while d <= end_date:
@@ -654,7 +667,7 @@ def render_week(start_date, end_date, work, meetings, others):
     # CSS grid: lane + up to 7 days.
     cols = st.columns(len(days) + 1, gap="small")
     with cols[0]:
-        st.markdown('<div class="day-head">LANE</div>', unsafe_allow_html=True)
+        st.markdown('<div class="day-head">ACTIVITY</div>', unsafe_allow_html=True)
     for i, d in enumerate(days, start=1):
         with cols[i]:
             st.markdown(
@@ -663,17 +676,14 @@ def render_week(start_date, end_date, work, meetings, others):
                 unsafe_allow_html=True,
             )
 
-    lane_specs = [
-        ("WORK", "work"),
-        ("MEETING", "meeting"),
-        ("OTHER", "other"),
-    ]
+    lane_specs = [("WORK", "work"), ("MEETING", "meeting"), ("OTHER", "other")]
+    lane_specs = [x for x in lane_specs if x[1] in visible_activities]
 
     for lane_name, lane_type in lane_specs:
         cols = st.columns(len(days) + 1, gap="small")
         with cols[0]:
             st.markdown(
-                f'<div class="lane-label">{lane_name}</div>',
+                f'<div class="lane-label {lane_type}-lane">{lane_name}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -686,7 +696,7 @@ def render_week(start_date, end_date, work, meetings, others):
                         if gd == d:
                             rows.extend(items)
                     st.markdown(
-                        f'<div class="cell">{render_work_cell(rows)}</div>',
+                        f'<div class="cell work-cell">{render_work_cell(rows)}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -696,133 +706,151 @@ def render_week(start_date, end_date, work, meetings, others):
                         if gd == d:
                             rows.extend(items)
                     st.markdown(
-                        f'<div class="cell">{render_meeting_cell(rows)}</div>',
+                        f'<div class="cell meeting-cell">{render_meeting_cell(rows)}</div>',
                         unsafe_allow_html=True,
                     )
 
                 else:
                     rows = other_groups.get(d, [])
                     st.markdown(
-                        f'<div class="cell">{render_other_cell(rows)}</div>',
+                        f'<div class="cell other-cell">{render_other_cell(rows)}</div>',
                         unsafe_allow_html=True,
                     )
 
 
 def weekly_dashboard():
-    st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
-        'Other remains independent of project filter</div>',
-        unsafe_allow_html=True,
-    )
-
     projects = get_projects()
-    project_options = ["All Projects"] + projects["id"].tolist() if not projects.empty else ["All Projects"]
+    project_options = (["All"] + projects["id"].tolist()) if not projects.empty else ["All"]
 
-    c1, c2, c3 = st.columns([1.1, 1.5, 1.0])
-    with c1:
-        month_options = []
-        # Build months from projects/activity horizon + current year around it.
-        conn = get_conn()
-        dates = []
-        for table, col in [
-            ("work_activity", "end_date"),
-            ("meeting_activity", "activity_date"),
-            ("other_activity", "activity_date"),
-        ]:
-            q = f"SELECT MIN({col}), MAX({col}) FROM {table}"
-            r = conn.execute(q).fetchone()
-            if r[0]:
-                dates.append(parse_date(r[0]))
-            if r[1]:
-                dates.append(parse_date(r[1]))
-        conn.close()
-
-        if dates:
-            min_d, max_d = min(dates), max(dates)
-        else:
-            today = date.today()
-            min_d, max_d = date(today.year, today.month, 1), today
-
-        months = []
-        cur = date(min_d.year, min_d.month, 1)
-        while cur <= max_d:
-            months.append(cur)
-            if cur.month == 12:
-                cur = date(cur.year + 1, 1, 1)
-            else:
-                cur = date(cur.year, cur.month + 1, 1)
-
-        month_labels = [m.strftime("%b %Y") for m in months]
-        default_idx = max(0, len(month_labels) - 1)
-        selected_label = st.selectbox("MONTH", month_labels, index=default_idx)
-        selected_month = months[month_labels.index(selected_label)]
-
-    with c2:
-        selected_project = st.selectbox("PROJECT", project_options)
-
-    with c3:
-        weeks = month_weeks(selected_month.year, selected_month.month)
-        week_options = ["All"] + [f"Week {i+1}" for i in range(len(weeks))]
-        selected_week = st.selectbox("WEEK", week_options)
-
-    selected_weeks = list(enumerate(weeks, start=1))
-    if selected_week != "All":
-        idx = int(selected_week.split()[-1])
-        selected_weeks = [selected_weeks[idx - 1]]
-
-    month_start = selected_month
-    month_end = date(
-        selected_month.year,
-        selected_month.month,
-        calendar.monthrange(selected_month.year, selected_month.month)[1],
-    )
-
-    work, meetings, others = load_activities(
-        month_start, month_end, selected_project
-    )
-
-    # KPI strip
-    work_count = len(work)
-    meeting_count = len(meetings)
-    conflict_count = 0  # V1 UI keeps source conflict fields out; can be added later.
-    submission_count = (
-        int((work["activity_type"].str.lower() == "submission").sum())
-        if not work.empty else 0
-    )
-
-    k = st.columns(4)
-    for col, label, value in [
-        (k[0], "WORK ITEMS", work_count),
-        (k[1], "MEETINGS", meeting_count),
-        (k[2], "SUBMISSIONS", submission_count),
-        (k[3], "OTHER ACTIVITIES", len(others)),
+    # Calendar range is derived from data + current year; no Setup entry needed.
+    conn = get_conn()
+    date_values = []
+    for table, col in [
+        ("work_activity", "end_date"),
+        ("meeting_activity", "activity_date"),
+        ("other_activity", "activity_date"),
     ]:
-        with col:
-            st.markdown(
-                f'<div class="kpi"><div class="kpi-label">{label}</div>'
-                f'<div class="kpi-value">{value}</div></div>',
-                unsafe_allow_html=True,
+        rows = conn.execute(
+            f"SELECT {col} FROM {table} WHERE {col} IS NOT NULL AND {col} <> ''"
+        ).fetchall()
+        date_values.extend([r[0] for r in rows if r[0]])
+    conn.close()
+
+    years = {date.today().year}
+    for value in date_values:
+        try:
+            years.add(parse_date(value).year)
+        except Exception:
+            pass
+    years = sorted(years)
+
+    month_names = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+
+    # ========================================================
+    # STICKY DASHBOARD HEADER
+    # ========================================================
+    header = st.container()
+    with header:
+        st.markdown('<div id="weekly-dashboard-anchor"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
+            'Other remains independent of project filter</div>',
+            unsafe_allow_html=True,
+        )
+
+        c1, c2, c3, c4, c5 = st.columns([1.0, .8, 1.7, 1.1, 1.15])
+        with c1:
+            selected_month_no = st.selectbox(
+                "MONTH", range(1, 13), index=date.today().month - 1,
+                format_func=lambda x: month_names[x - 1], key="dash_month"
+            )
+        with c2:
+            default_year_index = years.index(date.today().year) if date.today().year in years else len(years) - 1
+            selected_year = st.selectbox("YEAR", years, index=default_year_index, key="dash_year")
+        with c3:
+            selected_projects = st.multiselect(
+                "PROJECT",
+                project_options,
+                default=["All"],
+                placeholder="Select project(s)",
+                format_func=lambda x: (
+                    "All Projects" if x == "All" else
+                    f"{x} | {projects.loc[projects['id'].eq(x), 'name'].iloc[0]}"
+                    if not projects.loc[projects['id'].eq(x)].empty else x
+                ),
+                key="dash_projects",
+            )
+        with c4:
+            selected_month = date(selected_year, selected_month_no, 1)
+            weeks = month_weeks(selected_month.year, selected_month.month)
+            week_options = ["All"] + [f"Week {i+1} ({w[0].strftime('%d')}–{w[1].strftime('%d %b')})" for i, w in enumerate(weeks)]
+            selected_week = st.selectbox("WEEK", week_options, key="dash_week")
+        with c5:
+            activity_options = ["All", "Work", "Meeting", "Other"]
+            selected_activity = st.multiselect(
+                "ACTIVITY", activity_options, default=["All"],
+                placeholder="Select activity", key="dash_activity"
             )
 
-    st.write("")
+        st.markdown('<div class="activity-filter-note">PROJECT and ACTIVITY support multiple selections. "All" shows everything.</div>', unsafe_allow_html=True)
+
+        # All is the default/master selection; if it is present, show everything.
+        project_filter = "All Projects" if (not selected_projects or "All" in selected_projects) else selected_projects
+
+        if not selected_activity or "All" in selected_activity:
+            visible_activities = {"work", "meeting", "other"}
+        else:
+            visible_activities = {x.lower() for x in selected_activity}
+
+        month_start = selected_month
+        month_end = date(
+            selected_month.year, selected_month.month,
+            calendar.monthrange(selected_month.year, selected_month.month)[1],
+        )
+
+        # Load the month without project restriction, then apply multi-select.
+        work, meetings, others = load_activities(month_start, month_end, "All Projects")
+        if selected_projects and "All" not in selected_projects:
+            work = work[work["project_id"].isin(selected_projects)].copy()
+            meetings = meetings[meetings["project_id"].isin(selected_projects)].copy()
+            # Other intentionally remains independent of project filter.
+
+        # KPI strip reflects the visible activity filter.
+        k = st.columns(4)
+        kpi_values = [
+            ("WORK ITEMS", len(work) if "work" in visible_activities else 0),
+            ("MEETINGS", len(meetings) if "meeting" in visible_activities else 0),
+            ("SUBMISSIONS", int((work["activity_type"].str.lower() == "submission").sum()) if "work" in visible_activities and not work.empty else 0),
+            ("OTHER ACTIVITIES", len(others) if "other" in visible_activities else 0),
+        ]
+        for col, (label, value) in zip(k, kpi_values):
+            with col:
+                st.markdown(
+                    f'<div class="kpi"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>',
+                    unsafe_allow_html=True,
+                )
+    selected_weeks = list(enumerate(weeks, start=1))
+    if selected_week != "All":
+        idx = int(selected_week.split()[1])
+        selected_weeks = [selected_weeks[idx - 1]]
 
     for _, (week_start, week_end) in selected_weeks:
-        # Clip week data to actual week.
-        w = work[
-            (work["end_date"] >= week_start.isoformat())
-            & (work["end_date"] <= week_end.isoformat())
-        ].copy()
-        m = meetings[
-            (meetings["activity_date"] >= week_start.isoformat())
-            & (meetings["activity_date"] <= week_end.isoformat())
-        ].copy()
-        o = others[
-            (others["activity_date"] >= week_start.isoformat())
-            & (others["activity_date"] <= week_end.isoformat())
-        ].copy()
+        w = work[(work["end_date"] >= week_start.isoformat()) & (work["end_date"] <= week_end.isoformat())].copy()
+        m = meetings[(meetings["activity_date"] >= week_start.isoformat()) & (meetings["activity_date"] <= week_end.isoformat())].copy()
+        o = others[(others["activity_date"] >= week_start.isoformat()) & (others["activity_date"] <= week_end.isoformat())].copy()
 
-        render_week(week_start, week_end, w, m, o)
+        if "work" not in visible_activities:
+            w = w.iloc[0:0]
+        if "meeting" not in visible_activities:
+            m = m.iloc[0:0]
+        if "other" not in visible_activities:
+            o = o.iloc[0:0]
+
+        render_week(week_start, week_end, w, m, o, visible_activities)
 
 
 # ============================================================
