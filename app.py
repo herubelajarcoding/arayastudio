@@ -124,88 +124,28 @@ st.markdown(
         padding: 0.2rem 0;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
-    .kpi-row {
-        display:grid;
-        grid-template-columns:repeat(4,minmax(0,1fr));
-        gap:16px;
-        margin-top:8px;
-        margin-bottom:12px;
-    }
-    .kpi {
-        position:relative;
-        min-height:126px;
-        padding:20px 22px;
-        border:1px solid rgba(16,24,40,.06);
-        border-radius:15px;
-        overflow:hidden;
-        box-shadow:0 3px 12px rgba(16,24,40,.05);
-        display:flex;
-        align-items:center;
-        gap:18px;
-    }
-    .kpi::after {
-        content:"";
-        position:absolute;
-        width:150px;
-        height:150px;
-        right:-42px;
-        bottom:-82px;
-        border-radius:50%;
-        background:rgba(255,255,255,.38);
-    }
-    .kpi::before {
-        content:"";
-        position:absolute;
-        width:92px;
-        height:92px;
-        right:-24px;
-        top:-35px;
-        border-radius:50%;
-        background:rgba(255,255,255,.25);
-    }
-    .kpi.work {background:linear-gradient(135deg,#EAF4FF 0%,#DCEEFF 100%);}
-    .kpi.meeting {background:linear-gradient(135deg,#FFF9DF 0%,#FFF1B9 100%);}
-    .kpi.submission {background:linear-gradient(135deg,#FFF0F1 0%,#FFE0E3 100%);}
-    .kpi.other {background:linear-gradient(135deg,#F4ECFF 0%,#E9DDFF 100%);}
-    .kpi-icon {
-        width:54px;
-        height:54px;
-        min-width:54px;
-        border-radius:14px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        position:relative;
-        z-index:2;
-    }
+    .kpi-row {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:8px 0 12px;}
+    .kpi {position:relative;min-height:126px;padding:20px 22px;border:1px solid rgba(16,24,40,.06);border-radius:15px;overflow:hidden;box-shadow:0 3px 12px rgba(16,24,40,.05);display:flex;align-items:center;gap:18px;}
+    .kpi::after {content:"";position:absolute;width:150px;height:150px;right:-42px;bottom:-82px;border-radius:50%;background:rgba(255,255,255,.38);}
+    .kpi::before {content:"";position:absolute;width:92px;height:92px;right:-24px;top:-35px;border-radius:50%;background:rgba(255,255,255,.25);}
+    .kpi.work {background:linear-gradient(135deg,#EAF4FF,#DCEEFF);}
+    .kpi.meeting {background:linear-gradient(135deg,#FFF9DF,#FFF1B9);}
+    .kpi.submission {background:linear-gradient(135deg,#FFF0F1,#FFE0E3);}
+    .kpi.other {background:linear-gradient(135deg,#F4ECFF,#E9DDFF);}
+    .kpi-icon {width:54px;height:54px;min-width:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;z-index:2;}
     .kpi.work .kpi-icon {background:#1479E9;color:#fff;}
     .kpi.meeting .kpi-icon {background:#F5B400;color:#fff;}
     .kpi.submission .kpi-icon {background:#EF4444;color:#fff;}
     .kpi.other .kpi-icon {background:#8B5CF6;color:#fff;}
     .kpi-content {position:relative;z-index:2;}
-    .kpi-label {
-        font-size:.76rem;
-        font-weight:800;
-        letter-spacing:.03em;
-        text-transform:uppercase;
-        margin-bottom:4px;
-    }
+    .kpi-label {font-size:.76rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;margin-bottom:4px;}
     .kpi.work .kpi-label {color:#1479E9;}
     .kpi.meeting .kpi-label {color:#C88A00;}
     .kpi.submission .kpi-label {color:#E33A40;}
     .kpi.other .kpi-label {color:#7040D8;}
-    .kpi-value {
-        font-size:2rem;
-        line-height:1;
-        font-weight:850;
-        color:#102A56;
-    }
-    @media (max-width: 900px) {
-        .kpi-row {grid-template-columns:repeat(2,minmax(0,1fr));}
-    }
-    @media (max-width: 560px) {
-        .kpi-row {grid-template-columns:1fr;}
-    }
+    .kpi-value {font-size:2rem;line-height:1;font-weight:850;color:#102A56;}
+    @media (max-width:900px){.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width:560px){.kpi-row{grid-template-columns:1fr;}}
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
     </style>
     """,
@@ -949,13 +889,10 @@ def weekly_dashboard():
             meetings = meetings[meetings["project_id"].isin(selected_projects)].copy()
             # Other intentionally remains independent of project filter.
 
-        # KPI strip — visual treatment follows the approved mockup.
+        # KPI strip — visual only; filter logic above remains unchanged.
         work_count = len(work) if "work" in visible_activities else 0
         meeting_count = len(meetings) if "meeting" in visible_activities else 0
-        submission_count = (
-            int((work["activity_type"].str.lower() == "submission").sum())
-            if "work" in visible_activities and not work.empty else 0
-        )
+        submission_count = int((work["activity_type"].str.lower() == "submission").sum()) if "work" in visible_activities and not work.empty else 0
         other_count = len(others) if "other" in visible_activities else 0
 
         icon_work = '''<svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M15 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>'''
@@ -969,17 +906,9 @@ def weekly_dashboard():
             ("submission", "SUBMISSIONS", submission_count, icon_submission),
             ("other", "OTHER ACTIVITIES", other_count, icon_other),
         ]
-
         cards_html = '<div class="kpi-row">'
         for css_class, label, value, icon in cards:
-            cards_html += (
-                f'<div class="kpi {css_class}">'
-                f'<div class="kpi-icon">{icon}</div>'
-                f'<div class="kpi-content">'
-                f'<div class="kpi-label">{label}</div>'
-                f'<div class="kpi-value">{value}</div>'
-                f'</div></div>'
-            )
+            cards_html += f'<div class="kpi {css_class}"><div class="kpi-icon">{icon}</div><div class="kpi-content"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div></div>'
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
     selected_weeks = list(enumerate(weeks, start=1))
