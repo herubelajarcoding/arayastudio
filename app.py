@@ -123,49 +123,6 @@ st.markdown(
     }
     .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
-    /* ========================================================
-       V3a MODULE SHELL
-       ======================================================== */
-    .module-shell-grid {
-        display:grid;
-        grid-template-columns:repeat(3,minmax(0,1fr));
-        gap:1rem;
-        margin-top:1.2rem;
-    }
-    .module-shell-card {
-        min-height:145px;
-        padding:1.15rem;
-        border:1px solid #D0D5DD;
-        border-radius:16px;
-        background:#FFFFFF;
-        box-shadow:0 3px 10px rgba(16,24,40,.05);
-    }
-    .module-shell-icon {
-        width:42px;
-        height:42px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        border-radius:12px;
-        background:#F2F4F7;
-        font-size:1.3rem;
-        margin-bottom:.8rem;
-    }
-    .module-shell-title {
-        font-size:1rem;
-        font-weight:800;
-        color:#101828;
-        margin-bottom:.35rem;
-    }
-    .module-shell-desc {
-        font-size:.82rem;
-        line-height:1.45;
-        color:#667085;
-    }
-    @media (max-width: 900px) {
-        .module-shell-grid {grid-template-columns:1fr;}
-    }
-
     .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
@@ -1943,89 +1900,87 @@ def activities_page():
 # ============================================================
 # V3A APPLICATION SHELL
 # ============================================================
-# V3a establishes the information architecture only.
-# Existing Weekly Dashboard and Daily Activities remain functional.
-# Other V3 modules are intentionally represented as houses/placeholders
-# until each input module is designed and migrated one by one.
-
-
-def v3a_module_header(title, subtitle=""):
-    st.markdown(f'<div class="app-title">{html.escape(title)}</div>', unsafe_allow_html=True)
-    if subtitle:
-        st.markdown(f'<div class="app-subtitle">{html.escape(subtitle)}</div>', unsafe_allow_html=True)
-
-
-def placeholder_module(title, description, items):
-    v3a_module_header(title, description)
-    st.markdown(
-        '<div class="module-shell-grid">'
-        + ''.join(
-            f'<div class="module-shell-card">'
-            f'<div class="module-shell-icon">{icon}</div>'
-            f'<div class="module-shell-title">{html.escape(name)}</div>'
-            f'<div class="module-shell-desc">{html.escape(desc)}</div>'
-            f'</div>'
-            for icon, name, desc in items
-        )
-        + '</div>',
-        unsafe_allow_html=True,
-    )
-
 
 def input_data_page(submodule):
-    if submodule == "Input Activities":
+    if submodule == "Activities":
         activities_page()
         return
 
-    shells = {
-        "Input Team": (
-            "Input Team",
-            "Master data operasional untuk mendefinisikan kelompok/team yang digunakan oleh modul manajerial.",
-            [
-                ("👥", "Team Master", "Rumah input Team. Struktur field dan relasi akan kita finalisasi pada tahap berikutnya."),
-                ("↗", "Reference", "Parameter Team akan mengambil pilihan dari Setup."),
-            ],
-        ),
-        "Input Project": (
-            "Input Project",
-            "Master data project yang menjadi sumber bagi allocation, activities, dan dashboard.",
-            [
-                ("▣", "Project Master", "Rumah input project. Project baru akan menjadi pilihan pada modul lain."),
-                ("↗", "Dependency", "Project akan menjadi master untuk Staff Allocation dan Activities."),
-            ],
-        ),
-        "Input Staff Allocation": (
-            "Input Staff Allocation",
-            "Relasi manajerial antara Staff, Team, Project, Role, dan porsi/alokasi.",
-            [
-                ("👤", "Allocation Matrix", "Rumah penempatan staff ke project/team."),
-                ("↔", "Dependency", "Pilihan Staff, Team, Project, dan Role berasal dari master terkait."),
-            ],
-        ),
+    titles = {
+        "Input Team": "Input Team",
+        "Input Project": "Input Project",
+        "Staff Allocation": "Staff Allocation",
     }
-    title, desc, items = shells[submodule]
-    placeholder_module(title, desc, items)
+    descriptions = {
+        "Input Team": "Kelola master data team.",
+        "Input Project": "Kelola master data project.",
+        "Staff Allocation": "Kelola penempatan staff ke project.",
+    }
 
-
-def setup_module_page():
-    v3a_module_header(
-        "Setup",
-        "Reference & configuration layer. Dikelola admin dan menjadi sumber dropdown/parameter untuk Input Data.",
-    )
     st.markdown(
-        '<div class="module-shell-grid">'
-        '<div class="module-shell-card"><div class="module-shell-icon">⚙</div>'
-        '<div class="module-shell-title">Reference Values</div>'
-        '<div class="module-shell-desc">Priority, status, activity type, meeting type, location, project type, role, category, dan parameter lain.</div></div>'
-        '<div class="module-shell-card"><div class="module-shell-icon">⌘</div>'
-        '<div class="module-shell-title">System Configuration</div>'
-        '<div class="module-shell-desc">Pengaturan admin yang memengaruhi perilaku aplikasi dan aturan tampilan.</div></div>'
-        '<div class="module-shell-card"><div class="module-shell-icon">◈</div>'
-        '<div class="module-shell-title">Future Rules</div>'
-        '<div class="module-shell-desc">Rumah untuk parameter manajerial yang nantinya dapat diubah tanpa mengedit Python.</div></div>'
-        '</div>',
+        f'<div class="app-title">{html.escape(titles[submodule])}</div>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f'<div class="app-subtitle">{html.escape(descriptions[submodule])}</div>',
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "Modul ini sudah disiapkan dalam struktur V3. "
+        "Form input akan kita bangun bertahap."
+    )
+
+
+def setup_page_v3a():
+    st.markdown('<div class="app-title">Setup</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="app-subtitle">Pengaturan dan reference data aplikasi.</div>',
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "Setup menjadi area administrasi untuk parameter dan konfigurasi "
+        "yang digunakan oleh modul Input Data."
+    )
+
+
+# ============================================================
+# INITIALIZATION
+# ============================================================
+
+init_db()
+seed_from_workbook()
+
+if "seed_error" in st.session_state:
+    st.warning(f"Workbook seed warning: {st.session_state['seed_error']}")
+
+st.sidebar.markdown("## 📐 ARAYASTD")
+st.sidebar.caption("Studio Control Board • V3")
+
+module = st.sidebar.radio(
+    "MODULE",
+    ["📊 Dashboard", "📝 Input Data", "⚙ Setup"],
+    key="v3a_module",
+)
+
+if module == "📊 Dashboard":
+    submodule = st.sidebar.radio(
+        "DASHBOARD",
+        ["Weekly Dashboard"],
+        key="v3a_dashboard_submodule",
+    )
+    if submodule == "Weekly Dashboard":
+        weekly_dashboard()
+
+elif module == "📝 Input Data":
+    submodule = st.sidebar.radio(
+        "INPUT DATA",
+        ["Input Team", "Input Project", "Staff Allocation", "Activities"],
+        key="v3a_input_submodule",
+    )
+    input_data_page(submodule)
+
+else:
+    setup_page_v3a()
 
 
 # ============================================================
