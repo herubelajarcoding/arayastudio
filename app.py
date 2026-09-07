@@ -126,6 +126,13 @@ st.markdown(
     /* ========================================================
        V3A SIDEBAR NAVIGATION
        ======================================================== */
+    section[data-testid="stSidebar"] > div {
+        padding-top:1.2rem;
+    }
+    section[data-testid="stSidebar"] .stButton > button {
+        min-height:2.35rem;
+        border-radius:9px;
+    }
     .v3-brand {
         display:flex;
         align-items:center;
@@ -182,28 +189,35 @@ st.markdown(
         font-size:.84rem;
     }
         .v3-subtree {
-        margin:.18rem 0 .75rem .55rem;
-        padding:.18rem 0 .18rem .85rem;
+        margin:.08rem 0 .72rem .55rem;
+        padding:.18rem 0 .15rem .78rem;
         border-left:2px solid #D0D5DD;
     }
-    section[data-testid="stSidebar"] .v3-subtree + div .stButton > button,
-    section[data-testid="stSidebar"] .v3-subtree ~ div .stButton > button {
-        font-size:.84rem;
+    section[data-testid="stSidebar"] .v3-subtree .stButton {
+        margin:0 !important;
     }
     section[data-testid="stSidebar"] .v3-subtree .stButton > button {
-        min-height:2.1rem;
-        margin:.05rem 0;
-        padding:.38rem .55rem;
-        background:transparent;
-        border-color:transparent;
-        box-shadow:none;
-        color:#344054;
-        justify-content:flex-start;
+        width:calc(100% - .25rem);
+        min-height:2rem;
+        margin:.02rem 0 !important;
+        padding:.34rem .55rem !important;
+        border:1px solid transparent !important;
+        border-radius:7px !important;
+        background:transparent !important;
+        box-shadow:none !important;
+        color:#344054 !important;
+        font-size:.83rem !important;
+        font-weight:500 !important;
+        text-align:left !important;
+        justify-content:flex-start !important;
     }
     section[data-testid="stSidebar"] .v3-subtree .stButton > button:hover {
-        background:#F2F4F7;
+        background:#F2F4F7 !important;
     }
-    .app-subtitle {color:#667085; margin-bottom:1rem;}
+    section[data-testid="stSidebar"] .v3-subtree .stButton > button:focus {
+        box-shadow:none !important;
+    }
+        .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
         border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
