@@ -165,24 +165,29 @@ st.markdown(
         font-size:.68rem;
         font-weight:800;
         letter-spacing:.08em;
-        margin:.8rem .15rem .45rem;
+        margin:.8rem .15rem .55rem;
     }
-    .v3-static-subtitle {
-        color:#98A2B3;
-        font-size:.64rem;
+
+    /* Module = section heading, not another clickable menu. */
+    .v3-module-heading {
+        color:#172B4D;
+        font-size:1.02rem;
         font-weight:800;
-        letter-spacing:.08em;
-        margin:.78rem 0 .2rem 1.05rem;
-        padding-left:.7rem;
-        border-left:2px solid #D0D5DD;
+        line-height:1.25;
+        margin:.72rem .15rem .22rem;
+        padding:.18rem .15rem;
     }
+
+    /* Submodules = the only clickable navigation items. */
     section[data-testid="stSidebar"] .stButton > button {
-        min-height:2.25rem;
-        border-radius:9px;
-        font-size:.86rem;
-        font-weight:600;
+        min-height:2.15rem;
+        border-radius:8px;
+        font-size:.84rem;
+        font-weight:550;
         text-align:left;
         justify-content:flex-start;
+        padding:.35rem .55rem;
+        margin:.02rem 0;
     }
     section[data-testid="stSidebar"] .stButton > button:hover {
         background:#F2F4F7;
@@ -2023,8 +2028,8 @@ if "seed_error" in st.session_state:
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION — V3A STATIC TREE
 # ------------------------------------------------------------
-# All modules and submodules are always visible.
-# Clicking a child selects the corresponding content.
+# V3a uses a clean static hierarchy:
+# Module names are section headers; only submodules are clickable.
 
 if "v3a_module" not in st.session_state:
     st.session_state.v3a_module = "Dashboard"
@@ -2047,29 +2052,15 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# Parent modules — always visible.
-for module_name, icon in [
-    ("Dashboard", "▣"),
-    ("Input Data", "✎"),
-    ("Setup", "⚙"),
-]:
-    active = st.session_state.v3a_module == module_name
-    if st.sidebar.button(
-        f"{icon}  {module_name}",
-        key=f"v3a_main_static_{module_name.lower().replace(' ', '_')}",
-        use_container_width=True,
-        type="primary" if active else "secondary",
-    ):
-        st.session_state.v3a_module = module_name
-        st.rerun()
-
-# Dashboard children
+# ------------------------------------------------------------
+# MODULE: DASHBOARD
+# ------------------------------------------------------------
 st.sidebar.markdown(
-    '<div class="v3-static-subtitle">DASHBOARD</div>',
+    '<div class="v3-module-heading">▣&nbsp;&nbsp;Dashboard</div>',
     unsafe_allow_html=True,
 )
 if st.sidebar.button(
-    f"{'●' if st.session_state.v3a_dashboard_submodule == 'Weekly Dashboard' else '○'}  Weekly Dashboard",
+    f"{'●' if st.session_state.v3a_module == 'Dashboard' else '○'}  Weekly Dashboard",
     key="v3a_static_weekly_dashboard",
     use_container_width=True,
 ):
@@ -2077,13 +2068,18 @@ if st.sidebar.button(
     st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
     st.rerun()
 
-# Input Data children
+# ------------------------------------------------------------
+# MODULE: INPUT DATA
+# ------------------------------------------------------------
 st.sidebar.markdown(
-    '<div class="v3-static-subtitle">INPUT DATA</div>',
+    '<div class="v3-module-heading">✎&nbsp;&nbsp;Input Data</div>',
     unsafe_allow_html=True,
 )
 for item in ["Input Team", "Input Project", "Staff Allocation", "Activities"]:
-    selected = st.session_state.v3a_input_submodule == item
+    selected = (
+        st.session_state.v3a_module == "Input Data"
+        and st.session_state.v3a_input_submodule == item
+    )
     if st.sidebar.button(
         f"{'●' if selected else '○'}  {item}",
         key=f"v3a_static_input_{item.lower().replace(' ', '_')}",
@@ -2093,9 +2089,11 @@ for item in ["Input Team", "Input Project", "Staff Allocation", "Activities"]:
         st.session_state.v3a_input_submodule = item
         st.rerun()
 
-# Setup currently has no children.
+# ------------------------------------------------------------
+# MODULE: SETUP
+# ------------------------------------------------------------
 st.sidebar.markdown(
-    '<div class="v3-static-subtitle">SETUP</div>',
+    '<div class="v3-module-heading">⚙&nbsp;&nbsp;Setup</div>',
     unsafe_allow_html=True,
 )
 
