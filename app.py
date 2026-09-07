@@ -162,50 +162,26 @@ st.markdown(
         font-size:.68rem;
         font-weight:800;
         letter-spacing:.08em;
-        margin:.8rem .15rem .35rem;
+        margin:.8rem .15rem .45rem;
     }
-    .v3-section-title {
-        color:#98A2B3;
-        font-size:.66rem;
-        font-weight:800;
-        letter-spacing:.08em;
-        margin:1.05rem .15rem .35rem 2.35rem;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] > label {
-        display:none !important;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] > div {
-        gap:.22rem !important;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    .v3-submenu-title {display:none;}
+    section[data-testid="stSidebar"] .stButton > button {
         border-radius:9px;
-        padding:.46rem .62rem !important;
-        margin:0 !important;
-        color:#344054;
+        min-height:2.35rem;
+        justify-content:flex-start;
+        text-align:left;
+        padding:.45rem .72rem;
         font-size:.88rem;
         font-weight:600;
-        transition:background .15s ease;
     }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-        background:#F2F4F7;
-    }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
-        background:#EAF2FF;
-        color:#175CD3;
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
         font-weight:800;
     }
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) > div:first-child {
-        background:#175CD3 !important;
-        border-color:#175CD3 !important;
+    /* Submenu buttons sit visually inside the selected module. */
+    section[data-testid="stSidebar"] .stButton + .stButton {
+        font-size:.84rem;
     }
-    /* Indent only the currently visible submodule group. */
-    section[data-testid="stSidebar"] .v3-section-title + div[data-testid="stRadio"] {
-        margin-left:1.15rem;
-        padding-left:.55rem;
-        border-left:2px solid #E4E7EC;
-    }
-
-    .app-subtitle {color:#667085; margin-bottom:1rem;}
+        .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
         border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
@@ -2042,6 +2018,9 @@ if "seed_error" in st.session_state:
 # SIDEBAR NAVIGATION
 # ------------------------------------------------------------
 
+if "v3a_module" not in st.session_state:
+    st.session_state.v3a_module = "Dashboard"
+
 st.sidebar.markdown(
     '<div class="v3-brand">'
     '<div class="v3-brand-mark">◢</div>'
@@ -2051,41 +2030,38 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown('<div class="v3-nav-label">MODULE</div>', unsafe_allow_html=True)
-
-module = st.sidebar.radio(
-    "MODULE",
-    ["Dashboard", "Input Data", "Setup"],
-    key="v3a_module",
-    label_visibility="collapsed",
+st.sidebar.markdown(
+    '<div class="v3-nav-label">MODULE</div>',
+    unsafe_allow_html=True,
 )
 
+# Main modules: buttons, not radio items.
+module_defs = [
+    ("Dashboard", "▣"),
+    ("Input Data", "✎"),
+    ("Setup", "⚙"),
+]
+
+for module_name, icon in module_defs:
+    active = st.session_state.v3a_module == module_name
+    if st.sidebar.button(
+        f"{icon}  {module_name}",
+        key=f"v3a_main_{module_name.lower().replace(' ', '_')}",
+        use_container_width=True,
+        type="primary" if active else "secondary",
+    ):
+        st.session_state.v3a_module = module_name
+        st.rerun()
+
+module = st.session_state.v3a_module
+
+# Only the selected module expands underneath its own main menu item.
 if module == "Dashboard":
-    st.sidebar.markdown(
-        '<div class="v3-section-title">DASHBOARD</div>',
-        unsafe_allow_html=True,
-    )
-    submodule = st.sidebar.radio(
-        "Dashboard submodules",
-        ["Weekly Dashboard"],
-        key="v3a_dashboard_submodule",
-        label_visibility="collapsed",
-    )
-    if submodule == "Weekly Dashboard":
+    if st.session_state.v3a_dashboard_submodule == "Weekly Dashboard":
         weekly_dashboard()
 
 elif module == "Input Data":
-    st.sidebar.markdown(
-        '<div class="v3-section-title">INPUT DATA</div>',
-        unsafe_allow_html=True,
-    )
-    submodule = st.sidebar.radio(
-        "Input Data submodules",
-        ["Input Team", "Input Project", "Staff Allocation", "Activities"],
-        key="v3a_input_submodule",
-        label_visibility="collapsed",
-    )
-    input_data_page(submodule)
+    input_data_page(st.session_state.v3a_input_submodule)
 
 else:
     setup_page_v3a()
