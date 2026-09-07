@@ -2057,10 +2057,14 @@ module = st.session_state.v3a_module
 
 # Only the selected module expands underneath its own main menu item.
 if module == "Dashboard":
+    if "v3a_dashboard_submodule" not in st.session_state:
+        st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
     if st.session_state.v3a_dashboard_submodule == "Weekly Dashboard":
         weekly_dashboard()
 
 elif module == "Input Data":
+    if "v3a_input_submodule" not in st.session_state:
+        st.session_state.v3a_input_submodule = "Input Team"
     input_data_page(st.session_state.v3a_input_submodule)
 
 else:
