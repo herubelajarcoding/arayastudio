@@ -124,20 +124,16 @@ st.markdown(
     .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
     /* ========================================================
-       V3A SIDEBAR NAVIGATION
+       V3A STATIC SIDEBAR TREE
        ======================================================== */
     section[data-testid="stSidebar"] > div {
-        padding-top:1.2rem;
-    }
-    section[data-testid="stSidebar"] .stButton > button {
-        min-height:2.35rem;
-        border-radius:9px;
+        padding-top:1.15rem;
     }
     .v3-brand {
         display:flex;
         align-items:center;
         gap:.72rem;
-        padding:.35rem .15rem 1.15rem .15rem;
+        padding:.35rem .15rem 1.05rem;
         margin-bottom:.25rem;
         border-bottom:1px solid #E4E7EC;
     }
@@ -171,53 +167,27 @@ st.markdown(
         letter-spacing:.08em;
         margin:.8rem .15rem .45rem;
     }
-    .v3-submenu-title {display:none;}
-    section[data-testid="stSidebar"] .stButton > button {
-        border-radius:9px;
-        min-height:2.35rem;
-        justify-content:flex-start;
-        text-align:left;
-        padding:.45rem .72rem;
-        font-size:.88rem;
-        font-weight:600;
-    }
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    .v3-static-subtitle {
+        color:#98A2B3;
+        font-size:.64rem;
         font-weight:800;
-    }
-    /* Submenu buttons sit visually inside the selected module. */
-    section[data-testid="stSidebar"] .stButton + .stButton {
-        font-size:.84rem;
-    }
-        .v3-subtree {
-        margin:.08rem 0 .72rem .55rem;
-        padding:.18rem 0 .15rem .78rem;
+        letter-spacing:.08em;
+        margin:.78rem 0 .2rem 1.05rem;
+        padding-left:.7rem;
         border-left:2px solid #D0D5DD;
     }
-    section[data-testid="stSidebar"] .v3-subtree .stButton {
-        margin:0 !important;
+    section[data-testid="stSidebar"] .stButton > button {
+        min-height:2.25rem;
+        border-radius:9px;
+        font-size:.86rem;
+        font-weight:600;
+        text-align:left;
+        justify-content:flex-start;
     }
-    section[data-testid="stSidebar"] .v3-subtree .stButton > button {
-        width:calc(100% - .25rem);
-        min-height:2rem;
-        margin:.02rem 0 !important;
-        padding:.34rem .55rem !important;
-        border:1px solid transparent !important;
-        border-radius:7px !important;
-        background:transparent !important;
-        box-shadow:none !important;
-        color:#344054 !important;
-        font-size:.83rem !important;
-        font-weight:500 !important;
-        text-align:left !important;
-        justify-content:flex-start !important;
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background:#F2F4F7;
     }
-    section[data-testid="stSidebar"] .v3-subtree .stButton > button:hover {
-        background:#F2F4F7 !important;
-    }
-    section[data-testid="stSidebar"] .v3-subtree .stButton > button:focus {
-        box-shadow:none !important;
-    }
-        .app-subtitle {color:#667085; margin-bottom:1rem;}
+    .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
         border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
@@ -2051,11 +2021,17 @@ if "seed_error" in st.session_state:
     st.warning(f"Workbook seed warning: {st.session_state['seed_error']}")
 
 # ------------------------------------------------------------
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION — V3A STATIC TREE
 # ------------------------------------------------------------
+# All modules and submodules are always visible.
+# Clicking a child selects the corresponding content.
 
 if "v3a_module" not in st.session_state:
     st.session_state.v3a_module = "Dashboard"
+if "v3a_dashboard_submodule" not in st.session_state:
+    st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
+if "v3a_input_submodule" not in st.session_state:
+    st.session_state.v3a_input_submodule = "Input Team"
 
 st.sidebar.markdown(
     '<div class="v3-brand">'
@@ -2071,90 +2047,63 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-# Main modules: buttons, not radio items.
-module_defs = [
+# Parent modules — always visible.
+for module_name, icon in [
     ("Dashboard", "▣"),
     ("Input Data", "✎"),
     ("Setup", "⚙"),
-]
-
-for module_name, icon in module_defs:
+]:
     active = st.session_state.v3a_module == module_name
     if st.sidebar.button(
         f"{icon}  {module_name}",
-        key=f"v3a_main_{module_name.lower().replace(' ', '_')}",
+        key=f"v3a_main_static_{module_name.lower().replace(' ', '_')}",
         use_container_width=True,
         type="primary" if active else "secondary",
     ):
         st.session_state.v3a_module = module_name
         st.rerun()
 
-module = st.session_state.v3a_module
+# Dashboard children
+st.sidebar.markdown(
+    '<div class="v3-static-subtitle">DASHBOARD</div>',
+    unsafe_allow_html=True,
+)
+if st.sidebar.button(
+    f"{'●' if st.session_state.v3a_dashboard_submodule == 'Weekly Dashboard' else '○'}  Weekly Dashboard",
+    key="v3a_static_weekly_dashboard",
+    use_container_width=True,
+):
+    st.session_state.v3a_module = "Dashboard"
+    st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
+    st.rerun()
 
-# ------------------------------------------------------------
-# EXPANDED SUBMODULES
-# ------------------------------------------------------------
-# The selected parent module stays highlighted and its children
-# are rendered immediately underneath it.
-
-if module == "Dashboard":
-    if "v3a_dashboard_submodule" not in st.session_state:
-        st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
-
-    st.sidebar.markdown(
-        '<div class="v3-subtree">',
-        unsafe_allow_html=True,
-    )
+# Input Data children
+st.sidebar.markdown(
+    '<div class="v3-static-subtitle">INPUT DATA</div>',
+    unsafe_allow_html=True,
+)
+for item in ["Input Team", "Input Project", "Staff Allocation", "Activities"]:
+    selected = st.session_state.v3a_input_submodule == item
     if st.sidebar.button(
-        f"{'●' if st.session_state.v3a_dashboard_submodule == 'Weekly Dashboard' else '○'}  Weekly Dashboard",
-        key="v3a_sub_weekly_dashboard",
+        f"{'●' if selected else '○'}  {item}",
+        key=f"v3a_static_input_{item.lower().replace(' ', '_')}",
         use_container_width=True,
     ):
-        st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
+        st.session_state.v3a_module = "Input Data"
+        st.session_state.v3a_input_submodule = item
         st.rerun()
-    st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
-elif module == "Input Data":
-    if "v3a_input_submodule" not in st.session_state:
-        st.session_state.v3a_input_submodule = "Input Team"
+# Setup currently has no children.
+st.sidebar.markdown(
+    '<div class="v3-static-subtitle">SETUP</div>',
+    unsafe_allow_html=True,
+)
 
-    st.sidebar.markdown(
-        '<div class="v3-subtree">',
-        unsafe_allow_html=True,
-    )
-
-    input_submodules = [
-        "Input Team",
-        "Input Project",
-        "Staff Allocation",
-        "Activities",
-    ]
-
-    for item in input_submodules:
-        selected = st.session_state.v3a_input_submodule == item
-        if st.sidebar.button(
-            f"{'●' if selected else '○'}  {item}",
-            key=f"v3a_sub_{item.lower().replace(' ', '_')}",
-            use_container_width=True,
-        ):
-            st.session_state.v3a_input_submodule = item
-            st.rerun()
-
-    st.sidebar.markdown('</div>', unsafe_allow_html=True)
-
-# Setup currently has no submodule.
-
+module = st.session_state.v3a_module
 
 if module == "Dashboard":
-    if "v3a_dashboard_submodule" not in st.session_state:
-        st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
-    if st.session_state.v3a_dashboard_submodule == "Weekly Dashboard":
-        weekly_dashboard()
-
+    weekly_dashboard()
 elif module == "Input Data":
-    if "v3a_input_submodule" not in st.session_state:
-        st.session_state.v3a_input_submodule = "Input Team"
     input_data_page(st.session_state.v3a_input_submodule)
-
 else:
     setup_page_v3a()
