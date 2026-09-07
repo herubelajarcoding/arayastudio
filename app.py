@@ -123,6 +123,88 @@ st.markdown(
     }
     .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
     .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
+    /* ========================================================
+       V3A SIDEBAR NAVIGATION
+       ======================================================== */
+    .v3-brand {
+        display:flex;
+        align-items:center;
+        gap:.72rem;
+        padding:.35rem .15rem 1.15rem .15rem;
+        margin-bottom:.25rem;
+        border-bottom:1px solid #E4E7EC;
+    }
+    .v3-brand-mark {
+        width:38px;
+        height:38px;
+        border-radius:11px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#172B4D;
+        color:#FFFFFF;
+        font-size:1.25rem;
+        font-weight:800;
+    }
+    .v3-brand-name {
+        color:#172B4D;
+        font-size:1.08rem;
+        font-weight:850;
+        letter-spacing:.02em;
+    }
+    .v3-brand-sub {
+        color:#667085;
+        font-size:.70rem;
+        margin-top:.12rem;
+    }
+    .v3-nav-label {
+        color:#98A2B3;
+        font-size:.68rem;
+        font-weight:800;
+        letter-spacing:.08em;
+        margin:.8rem .15rem .35rem;
+    }
+    .v3-section-title {
+        color:#98A2B3;
+        font-size:.66rem;
+        font-weight:800;
+        letter-spacing:.08em;
+        margin:1.05rem .15rem .35rem 2.35rem;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > label {
+        display:none !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] > div {
+        gap:.22rem !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+        border-radius:9px;
+        padding:.46rem .62rem !important;
+        margin:0 !important;
+        color:#344054;
+        font-size:.88rem;
+        font-weight:600;
+        transition:background .15s ease;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+        background:#F2F4F7;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+        background:#EAF2FF;
+        color:#175CD3;
+        font-weight:800;
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) > div:first-child {
+        background:#175CD3 !important;
+        border-color:#175CD3 !important;
+    }
+    /* Indent only the currently visible submodule group. */
+    section[data-testid="stSidebar"] .v3-section-title + div[data-testid="stRadio"] {
+        margin-left:1.15rem;
+        padding-left:.55rem;
+        border-left:2px solid #E4E7EC;
+    }
+
     .app-subtitle {color:#667085; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
@@ -1894,12 +1976,15 @@ def activities_page():
 
 
 # ============================================================
-# MAIN
-# ============================================================
-
-# ============================================================
 # V3A APPLICATION SHELL
 # ============================================================
+# Three top-level modules:
+#   Dashboard
+#   Input Data
+#   Setup
+#
+# Only the selected module exposes its submodules.
+
 
 def input_data_page(submodule):
     if submodule == "Activities":
@@ -1926,8 +2011,8 @@ def input_data_page(submodule):
         unsafe_allow_html=True,
     )
     st.info(
-        "Modul ini sudah disiapkan dalam struktur V3. "
-        "Form input akan kita bangun bertahap."
+        "Modul ini sudah tersedia di struktur V3. "
+        "Form detail akan kita bangun bertahap."
     )
 
 
@@ -1953,71 +2038,54 @@ seed_from_workbook()
 if "seed_error" in st.session_state:
     st.warning(f"Workbook seed warning: {st.session_state['seed_error']}")
 
-st.sidebar.markdown("## 📐 ARAYASTD")
-st.sidebar.caption("Studio Control Board • V3")
+# ------------------------------------------------------------
+# SIDEBAR NAVIGATION
+# ------------------------------------------------------------
 
-module = st.sidebar.radio(
-    "MODULE",
-    ["📊 Dashboard", "📝 Input Data", "⚙ Setup"],
-    key="v3a_module",
+st.sidebar.markdown(
+    '<div class="v3-brand">'
+    '<div class="v3-brand-mark">◢</div>'
+    '<div><div class="v3-brand-name">ARAYASTD</div>'
+    '<div class="v3-brand-sub">Studio Control Board</div></div>'
+    '</div>',
+    unsafe_allow_html=True,
 )
 
-if module == "📊 Dashboard":
-    submodule = st.sidebar.radio(
-        "DASHBOARD",
-        ["Weekly Dashboard"],
-        key="v3a_dashboard_submodule",
-    )
-    if submodule == "Weekly Dashboard":
-        weekly_dashboard()
-
-elif module == "📝 Input Data":
-    submodule = st.sidebar.radio(
-        "INPUT DATA",
-        ["Input Team", "Input Project", "Staff Allocation", "Activities"],
-        key="v3a_input_submodule",
-    )
-    input_data_page(submodule)
-
-else:
-    setup_page_v3a()
-
-
-# ============================================================
-# INITIALIZATION
-# ============================================================
-
-init_db()
-seed_from_workbook()
-
-if "seed_error" in st.session_state:
-    st.warning(f"Workbook seed warning: {st.session_state['seed_error']}")
-
-st.sidebar.markdown("## 📐 Studio Control Board")
-st.sidebar.caption("ArayaStd V3a • Modular Architecture")
+st.sidebar.markdown('<div class="v3-nav-label">MODULE</div>', unsafe_allow_html=True)
 
 module = st.sidebar.radio(
     "MODULE",
     ["Dashboard", "Input Data", "Setup"],
     key="v3a_module",
+    label_visibility="collapsed",
 )
 
 if module == "Dashboard":
+    st.sidebar.markdown(
+        '<div class="v3-section-title">DASHBOARD</div>',
+        unsafe_allow_html=True,
+    )
     submodule = st.sidebar.radio(
-        "DASHBOARD",
+        "Dashboard submodules",
         ["Weekly Dashboard"],
         key="v3a_dashboard_submodule",
+        label_visibility="collapsed",
     )
     if submodule == "Weekly Dashboard":
         weekly_dashboard()
 
 elif module == "Input Data":
+    st.sidebar.markdown(
+        '<div class="v3-section-title">INPUT DATA</div>',
+        unsafe_allow_html=True,
+    )
     submodule = st.sidebar.radio(
-        "INPUT DATA",
-        ["Input Team", "Input Project", "Input Staff Allocation", "Input Activities"],
+        "Input Data submodules",
+        ["Input Team", "Input Project", "Staff Allocation", "Activities"],
         key="v3a_input_submodule",
+        label_visibility="collapsed",
     )
     input_data_page(submodule)
 
 else:
-    setup_module_page()
+    setup_page_v3a()
