@@ -2003,16 +2003,70 @@ def input_data_page(submodule):
     )
 
 
-def setup_page_v3a():
+
+def seed_setup_master():
+    """Import SETUP.xlsx master references into reference_values."""
+    conn=get_conn()
+    count=conn.execute("SELECT COUNT(*) FROM reference_values").fetchone()[0]
+    if count>0:
+        conn.close()
+        return
+    try:
+        wb=load_workbook('/mnt/data/SETUP.xlsx', data_only=True)
+        ws=wb['Setup']
+        groups={
+            'Role':0,
+            'Project Type':2,
+            'Phase':4,
+            'Project Status':8,
+            'Meeting Type':10,
+            'Meeting Location':12,
+            'Activity Type':14,
+            'Priority':16,
+            'Project Size':18,
+            'Workload Status':21,
+            'Mapping Status':24,
+            'Task Status':26,
+        }
+        for cat,col in groups.items():
+            for row in range(3, ws.max_row+1):
+                val=ws.cell(row=row,column=col+1).value
+                if val:
+                    conn.execute(
+                        'INSERT OR IGNORE INTO reference_values(category,value) VALUES(?,?)',
+                        (cat,str(val))
+                    )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def setup_page_v3b():
     st.markdown('<div class="app-title">Setup</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="app-subtitle">Pengaturan dan reference data aplikasi.</div>',
-        unsafe_allow_html=True,
-    )
-    st.info(
-        "Setup menjadi area administrasi untuk parameter dan konfigurasi "
-        "yang digunakan oleh modul Input Data."
-    )
+    st.markdown('<div class="app-subtitle">Master reference data aplikasi ARAYASTD.</div>', unsafe_allow_html=True)
+
+    seed_setup_master()
+    conn=get_conn()
+    categories=[r[0] for r in conn.execute('SELECT DISTINCT category FROM reference_values ORDER BY category').fetchall()]
+    conn.close()
+
+    if not categories:
+        st.warning('Setup master belum tersedia.')
+        return
+
+    selected=st.selectbox('Setup Category', categories)
+    conn=get_conn()
+    rows=conn.execute('SELECT value FROM reference_values WHERE category=? ORDER BY value',(selected,)).fetchall()
+    conn.close()
+
+    st.markdown(f'### {selected}')
+    for r in rows:
+        st.write('• '+r[0])
+
+    st.info('V3b-1: Master setup sudah terhubung. CRUD (add/edit/delete) akan dikembangkan pada tahap berikutnya.')
+
+def setup_page_v3a():
+    setup_page_v3b()
 
 
 # ============================================================
