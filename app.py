@@ -1727,15 +1727,15 @@ def init_master_database():
 
     # Master tables sesuai struktur SETUP.xlsx
     schemas = {
-        "role": "value TEXT",
-        "project_type": "value TEXT",
-        "project_status": "value TEXT",
-        "meeting_type": "value TEXT",
-        "meeting_location": "value TEXT",
-        "activity_type": "value TEXT",
-        "priority": "value TEXT",
-        "mapping_status": "value TEXT",
-        "task_status": "value TEXT",
+        "role": "role TEXT",
+        "project_type": "project_type TEXT",
+         "project_status": "status TEXT",
+        "meeting_type": "meeting_type TEXT",
+        "meeting_location": "location TEXT",
+        "activity_type": "activity_type TEXT",
+        "priority": "priority TEXT",
+        "mapping_status": "status TEXT",
+        "task_status": "status TEXT",
         "phase": "phase TEXT, sequence INTEGER, base_load REAL",
         "project_size": "project_size TEXT, multiplier REAL",
         "workload_status": "status TEXT, max_load REAL",
@@ -1750,21 +1750,23 @@ def init_master_database():
     if count == 0:
         df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
 
-        def insert_list(table, col):
+        def insert_list(table, col, field):
             for val in df.iloc[2:, col]:
                 if pd.notna(val):
-                    cur.execute(f"INSERT INTO master_{table}(value) VALUES (?)",
-                                (str(val).strip(),))
+                    cur.execute(
+                        f"INSERT INTO master_{table}({field}) VALUES (?)",
+                        (str(val).strip(),)
+                    )
 
-        insert_list("role",0)
-        insert_list("project_type",2)
-        insert_list("project_status",8)
-        insert_list("meeting_type",10)
-        insert_list("meeting_location",12)
-        insert_list("activity_type",14)
-        insert_list("priority",16)
-        insert_list("mapping_status",24)
-        insert_list("task_status",26)
+        insert_list("role",0,"role")
+        insert_list("project_type",2,"project_type")
+        insert_list("project_status",8,"status")
+        insert_list("meeting_type",10,"meeting_type")
+        insert_list("meeting_location",12,"location")
+        insert_list("activity_type",14,"activity_type")
+        insert_list("priority",16,"priority")
+        insert_list("mapping_status",24,"status")
+        insert_list("task_status",26,"status")
 
         for _,r in df.iloc[2:,4:7].dropna(how="all").iterrows():
             if pd.notna(r[4]):
