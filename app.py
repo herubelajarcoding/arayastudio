@@ -1720,122 +1720,103 @@ SETUP_FILE = "SETUP.xlsx"
 
 
 
+
 def init_master_database():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
 
-    # Ensure database schema is compatible with current version
-    cur.execute("""
-        SELECT name FROM sqlite_master
-        WHERE type='table' AND name='master_setup'
-    """)
-    exists = cur.fetchone()
+    # Master tables sesuai struktur SETUP.xlsx
+    schemas = {
+        "role": "value TEXT",
+        "project_type": "value TEXT",
+        "project_status": "value TEXT",
+        "meeting_type": "value TEXT",
+        "meeting_location": "value TEXT",
+        "activity_type": "value TEXT",
+        "priority": "value TEXT",
+        "mapping_status": "value TEXT",
+        "task_status": "value TEXT",
+        "phase": "phase TEXT, sequence INTEGER, base_load REAL",
+        "project_size": "project_size TEXT, multiplier REAL",
+        "workload_status": "status TEXT, max_load REAL",
+    }
 
-    rebuild = False
+    for name, cols in schemas.items():
+        cur.execute(f"CREATE TABLE IF NOT EXISTS master_{name} (id INTEGER PRIMARY KEY AUTOINCREMENT,{cols})")
 
-    if exists:
-        cols = [
-            row[1] for row in cur.execute(
-                "PRAGMA table_info(master_setup)"
-            ).fetchall()
-        ]
-        if "master_name" not in cols or "value" not in cols:
-            rebuild = True
-
-    if rebuild:
-        cur.execute("DROP TABLE IF EXISTS master_setup")
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS master_setup (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            master_name TEXT NOT NULL,
-            value TEXT NOT NULL
-        )
-    """)
-
-    count = cur.execute(
-        "SELECT COUNT(*) FROM master_setup"
-    ).fetchone()[0]
+    # Import hanya jika database masih kosong
+    count = cur.execute("SELECT COUNT(*) FROM master_role").fetchone()[0]
 
     if count == 0:
-        try:
-            df = pd.read_excel(
-                SETUP_FILE,
-                sheet_name="Setup",
-                header=None
-            )
+        df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
 
-            # Excel setup consists of horizontal master blocks.
-            # Row 0 = master title, row 1 = header, row 2+ = values.
-            for col in range(df.shape[1]):
-                master = df.iloc[0, col]
+        def insert_list(table, col):
+            for val in df.iloc[2:, col]:
+                if pd.notna(val):
+                    cur.execute(f"INSERT INTO master_{table}(value) VALUES (?)",
+                                (str(val).strip(),))
 
-                if pd.isna(master):
-                    continue
+        insert_list("role",0)
+        insert_list("project_type",2)
+        insert_list("project_status",8)
+        insert_list("meeting_type",10)
+        insert_list("meeting_location",12)
+        insert_list("activity_type",14)
+        insert_list("priority",16)
+        insert_list("mapping_status",24)
+        insert_list("task_status",26)
 
-                master = str(master).strip()
+        for _,r in df.iloc[2:,4:7].dropna(how="all").iterrows():
+            if pd.notna(r[4]):
+                cur.execute("INSERT INTO master_phase(phase,sequence,base_load) VALUES (?,?,?)",
+                            (str(r[4]), int(r[5]), float(r[6])))
 
-                for val in df.iloc[2:, col]:
-                    if pd.notna(val) and str(val).strip():
-                        cur.execute(
-                            """
-                            INSERT INTO master_setup
-                            (master_name, value)
-                            VALUES (?,?)
-                            """,
-                            (master, str(val).strip())
-                        )
+        for _,r in df.iloc[2:,18:20].dropna(how="all").iterrows():
+            if pd.notna(r[18]):
+                cur.execute("INSERT INTO master_project_size(project_size,multiplier) VALUES (?,?)",
+                            (str(r[18]), float(r[19])))
 
-        except Exception as e:
-            print("Master import error:", e)
+        for _,r in df.iloc[2:,21:23].dropna(how="all").iterrows():
+            if pd.notna(r[21]):
+                cur.execute("INSERT INTO master_workload_status(status,max_load) VALUES (?,?)",
+                            (str(r[21]), float(r[22])))
 
     conn.commit()
     conn.close()
 
 
-def get_master_setup(master=None):
-    conn = sqlite3.connect(DB_FILE)
-
-    if master:
-        df = pd.read_sql_query(
-            "SELECT value FROM master_setup WHERE master_name=?",
-            conn,
-            params=(master,)
-        )
-    else:
-        df = pd.read_sql_query(
-            "SELECT master_name,value FROM master_setup",
-            conn
-        )
-
+def get_master_table(name):
+    conn=sqlite3.connect(DB_FILE)
+    df=pd.read_sql_query(f"SELECT * FROM master_{name}",conn)
     conn.close()
     return df
-
 
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="app-subtitle">Master reference database. SETUP.xlsx hanya digunakan saat inisialisasi awal.</div>',
+        '<div class="app-subtitle">Master reference database.</div>',
         unsafe_allow_html=True,
     )
 
-    masters = get_master_setup()["master_name"].drop_duplicates().tolist()
+    tabs = st.tabs([
+        "Role","Project Type","Phase","Project Status",
+        "Meeting Type","Meeting Location","Activity Type",
+        "Priority","Project Size","Workload Status",
+        "Mapping Status","Task Status"
+    ])
 
-    tabs = st.tabs(masters)
+    mapping = [
+        "role","project_type","phase","project_status",
+        "meeting_type","meeting_location","activity_type",
+        "priority","project_size","workload_status",
+        "mapping_status","task_status"
+    ]
 
-    for tab, master in zip(tabs, masters):
+    for tab,name in zip(tabs,mapping):
         with tab:
-            st.markdown(f"### {master}")
-
-            df = get_master_setup(master)
-
-            st.dataframe(
-                df,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.caption("Data tersimpan pada database master.")
+            st.dataframe(get_master_table(name),
+                         use_container_width=True,
+                         hide_index=True)
 
 
 # ------------------------------------------------------------
