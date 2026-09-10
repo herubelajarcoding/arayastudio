@@ -1723,24 +1723,52 @@ def init_master_database():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
 
+    # Ensure database schema is compatible with current version
+    cur.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='master_setup'
+    """)
+    exists = cur.fetchone()
+
+    rebuild = False
+
+    if exists:
+        cols = [
+            row[1] for row in cur.execute(
+                "PRAGMA table_info(master_setup)"
+            ).fetchall()
+        ]
+        if "master_name" not in cols or "value" not in cols:
+            rebuild = True
+
+    if rebuild:
+        cur.execute("DROP TABLE IF EXISTS master_setup")
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS master_setup (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            master_name TEXT,
-            value TEXT
+            master_name TEXT NOT NULL,
+            value TEXT NOT NULL
         )
     """)
 
-    count = cur.execute("SELECT COUNT(*) FROM master_setup").fetchone()[0]
+    count = cur.execute(
+        "SELECT COUNT(*) FROM master_setup"
+    ).fetchone()[0]
 
     if count == 0:
         try:
-            df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
+            df = pd.read_excel(
+                SETUP_FILE,
+                sheet_name="Setup",
+                header=None
+            )
 
-            # Master blocks are separated by columns.
-            # Each block: row 0 = master name, row 1 = column header, rows below = values.
+            # Excel setup consists of horizontal master blocks.
+            # Row 0 = master title, row 1 = header, row 2+ = values.
             for col in range(df.shape[1]):
                 master = df.iloc[0, col]
+
                 if pd.isna(master):
                     continue
 
@@ -1749,7 +1777,11 @@ def init_master_database():
                 for val in df.iloc[2:, col]:
                     if pd.notna(val) and str(val).strip():
                         cur.execute(
-                            "INSERT INTO master_setup(master_name,value) VALUES (?,?)",
+                            """
+                            INSERT INTO master_setup
+                            (master_name, value)
+                            VALUES (?,?)
+                            """,
                             (master, str(val).strip())
                         )
 
