@@ -2042,28 +2042,64 @@ def seed_setup_master():
 
 
 def setup_page_v3b():
-    st.markdown('<div class="app-title">Setup</div>', unsafe_allow_html=True)
-    st.markdown('<div class="app-subtitle">Master reference data aplikasi ARAYASTD.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="app-subtitle">Master reference data aplikasi ARAYASTD. '
+        'Data pada modul ini menjadi sumber dropdown dan parameter modul lain.</div>',
+        unsafe_allow_html=True,
+    )
 
     seed_setup_master()
-    conn=get_conn()
-    categories=[r[0] for r in conn.execute('SELECT DISTINCT category FROM reference_values ORDER BY category').fetchall()]
-    conn.close()
 
-    if not categories:
-        st.warning('Setup master belum tersedia.')
-        return
+    setup_tabs = [
+        ("Role", "Role"),
+        ("Project Type", "Project Type"),
+        ("Phase", "Phase"),
+        ("Project Status", "Project Status"),
+        ("Meeting Type", "Meeting Type"),
+        ("Meeting Location", "Meeting Location"),
+        ("Activity Type", "Activity Type"),
+        ("Priority", "Priority"),
+        ("Project Size", "Project Size"),
+        ("Workload Status", "Workload Status"),
+        ("Mapping Status", "Mapping Status"),
+        ("Task Status", "Task Status"),
+    ]
 
-    selected=st.selectbox('Setup Category', categories)
-    conn=get_conn()
-    rows=conn.execute('SELECT value FROM reference_values WHERE category=? ORDER BY value',(selected,)).fetchall()
-    conn.close()
+    tabs = st.tabs([x[0] for x in setup_tabs])
 
-    st.markdown(f'### {selected}')
-    for r in rows:
-        st.write('• '+r[0])
+    for tab, (label, category) in zip(tabs, setup_tabs):
+        with tab:
+            conn = get_conn()
+            rows = conn.execute(
+                "SELECT value FROM reference_values WHERE category=? ORDER BY value",
+                (category,)
+            ).fetchall()
+            conn.close()
 
-    st.info('V3b-1: Master setup sudah terhubung. CRUD (add/edit/delete) akan dikembangkan pada tahap berikutnya.')
+            st.markdown(f"### {label}")
+
+            if rows:
+                data = [{"Value": r[0]} for r in rows]
+                st.dataframe(
+                    data,
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("Belum ada data master.")
+
+            st.button(
+                f"+ Add {label}",
+                key=f"add_{category.replace(' ','_')}",
+                disabled=True,
+            )
+
+    st.caption(
+        "V3b-2: Struktur Setup Manager sudah menggunakan master reference. "
+        "CRUD aktif akan dikembangkan pada tahap berikutnya."
+    )
+
 
 def setup_page_v3a():
     setup_page_v3b()
