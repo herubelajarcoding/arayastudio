@@ -2091,6 +2091,8 @@ if "v3a_dashboard_submodule" not in st.session_state:
     st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
 if "v3a_input_submodule" not in st.session_state:
     st.session_state.v3a_input_submodule = "Input Team"
+if "v3b_setup_submodule" not in st.session_state:
+    st.session_state.v3b_setup_submodule = "Setup Manager"
 
 st.sidebar.markdown(
     '<div class="v3-brand">'
@@ -2150,6 +2152,15 @@ st.sidebar.markdown(
     '<div class="v3-module-heading">⚙&nbsp;&nbsp;Setup</div>',
     unsafe_allow_html=True,
 )
+
+if st.sidebar.button(
+    f"{'●' if st.session_state.v3a_module == 'Setup' else '○'}  Setup Manager",
+    key="v3b_setup_manager",
+    use_container_width=True,
+):
+    st.session_state.v3a_module = "Setup"
+    st.session_state.v3b_setup_submodule = "Setup Manager"
+    st.rerun()
 
 module = st.session_state.v3a_module
 
