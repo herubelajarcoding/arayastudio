@@ -1718,6 +1718,7 @@ DB_FILE = "araya.db"
 SETUP_FILE = "SETUP.xlsx"
 
 
+
 def init_master_database():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -1725,54 +1726,58 @@ def init_master_database():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS master_setup (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT,
-            value TEXT,
-            notes TEXT
+            master_name TEXT,
+            value TEXT
         )
     """)
 
-    count = cur.execute(
-        "SELECT COUNT(*) FROM master_setup"
-    ).fetchone()[0]
+    count = cur.execute("SELECT COUNT(*) FROM master_setup").fetchone()[0]
 
     if count == 0:
         try:
             df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
 
-            # Import non-empty cells as initial reference values.
-            # This keeps Excel as seed only, not as active storage.
-            for col in df.columns:
-                category = str(df.iloc[0, col]) if pd.notna(df.iloc[0, col]) else f"Column_{col+1}"
-                for val in df.iloc[1:, col]:
-                    if pd.notna(val):
+            # Master blocks are separated by columns.
+            # Each block: row 0 = master name, row 1 = column header, rows below = values.
+            for col in range(df.shape[1]):
+                master = df.iloc[0, col]
+                if pd.isna(master):
+                    continue
+
+                master = str(master).strip()
+
+                for val in df.iloc[2:, col]:
+                    if pd.notna(val) and str(val).strip():
                         cur.execute(
-                            "INSERT INTO master_setup(category,value,notes) VALUES (?,?,?)",
-                            (category, str(val), "")
+                            "INSERT INTO master_setup(master_name,value) VALUES (?,?)",
+                            (master, str(val).strip())
                         )
+
         except Exception as e:
-            print("Seed error:", e)
+            print("Master import error:", e)
 
     conn.commit()
     conn.close()
 
 
-def get_master_setup(category=None):
+def get_master_setup(master=None):
     conn = sqlite3.connect(DB_FILE)
 
-    if category:
+    if master:
         df = pd.read_sql_query(
-            "SELECT value, notes FROM master_setup WHERE category=?",
+            "SELECT value FROM master_setup WHERE master_name=?",
             conn,
-            params=(category,)
+            params=(master,)
         )
     else:
         df = pd.read_sql_query(
-            "SELECT category,value,notes FROM master_setup",
+            "SELECT master_name,value FROM master_setup",
             conn
         )
 
     conn.close()
     return df
+
 
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
@@ -1781,15 +1786,15 @@ def setup_page():
         unsafe_allow_html=True,
     )
 
-    categories = get_master_setup()["category"].drop_duplicates().tolist()
+    masters = get_master_setup()["master_name"].drop_duplicates().tolist()
 
-    tabs = st.tabs(categories[:12])
+    tabs = st.tabs(masters)
 
-    for tab, category in zip(tabs, categories[:12]):
+    for tab, master in zip(tabs, masters):
         with tab:
-            st.markdown(f"### {category}")
+            st.markdown(f"### {master}")
 
-            df = get_master_setup(category)
+            df = get_master_setup(master)
 
             st.dataframe(
                 df,
@@ -1797,7 +1802,7 @@ def setup_page():
                 hide_index=True
             )
 
-            st.caption("Data ini sudah tersimpan di database master.")
+            st.caption("Data tersimpan pada database master.")
 
 
 # ------------------------------------------------------------
