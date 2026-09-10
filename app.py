@@ -1707,40 +1707,97 @@ def weekly_dashboard():
 # ============================================================
 
 
+
+# ============================================================
+# V3B DATABASE FOUNDATION
+# ============================================================
+# SETUP.xlsx is used only as initial seed.
+# After database creation, application reads SQLite database.
+
+DB_FILE = "araya.db"
+SETUP_FILE = "SETUP.xlsx"
+
+
+def init_master_database():
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS master_setup (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            value TEXT,
+            notes TEXT
+        )
+    """)
+
+    count = cur.execute(
+        "SELECT COUNT(*) FROM master_setup"
+    ).fetchone()[0]
+
+    if count == 0:
+        try:
+            df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
+
+            # Import non-empty cells as initial reference values.
+            # This keeps Excel as seed only, not as active storage.
+            for col in df.columns:
+                category = str(df.iloc[0, col]) if pd.notna(df.iloc[0, col]) else f"Column_{col+1}"
+                for val in df.iloc[1:, col]:
+                    if pd.notna(val):
+                        cur.execute(
+                            "INSERT INTO master_setup(category,value,notes) VALUES (?,?,?)",
+                            (category, str(val), "")
+                        )
+        except Exception as e:
+            print("Seed error:", e)
+
+    conn.commit()
+    conn.close()
+
+
+def get_master_setup(category=None):
+    conn = sqlite3.connect(DB_FILE)
+
+    if category:
+        df = pd.read_sql_query(
+            "SELECT value, notes FROM master_setup WHERE category=?",
+            conn,
+            params=(category,)
+        )
+    else:
+        df = pd.read_sql_query(
+            "SELECT category,value,notes FROM master_setup",
+            conn
+        )
+
+    conn.close()
+    return df
+
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="app-subtitle">Master reference data used by Input Data and future dashboards.</div>',
+        '<div class="app-subtitle">Master reference database. SETUP.xlsx hanya digunakan saat inisialisasi awal.</div>',
         unsafe_allow_html=True,
     )
 
-    try:
-        xls = pd.ExcelFile("SETUP.xlsx")
-    except:
-        xls = pd.ExcelFile("SETUP(1).xlsx")
+    categories = get_master_setup()["category"].drop_duplicates().tolist()
 
-    tab_names = xls.sheet_names
-    tabs = st.tabs(tab_names)
+    tabs = st.tabs(categories[:12])
 
-    for tab, sheet in zip(tabs, tab_names):
+    for tab, category in zip(tabs, categories[:12]):
         with tab:
-            df = pd.read_excel(xls, sheet_name=sheet)
+            st.markdown(f"### {category}")
 
-            st.markdown(f"### {sheet}")
+            df = get_master_setup(category)
 
-            st.data_editor(
+            st.dataframe(
                 df,
                 use_container_width=True,
-                hide_index=True,
-                num_rows="dynamic",
-                key=f"setup_{sheet}"
+                hide_index=True
             )
 
-            st.button(
-                f"Save {sheet}",
-                key=f"save_{sheet}",
-                type="primary"
-            )
+            st.caption("Data ini sudah tersimpan di database master.")
 
 
 # ------------------------------------------------------------
@@ -1826,6 +1883,8 @@ if st.sidebar.button(
     st.session_state.v3b_setup_submodule = "Setup Manager"
     st.rerun()
 
+init_master_database()
+
 module = st.session_state.v3a_module
 
 if module == "Dashboard":
@@ -1833,4 +1892,4 @@ if module == "Dashboard":
 elif module == "Input Data":
     input_data_page(st.session_state.v3a_input_submodule)
 else:
-    setup_page_v3a()
+    setup_page()
