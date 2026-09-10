@@ -1725,6 +1725,15 @@ def init_master_database():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
 
+    # Migration safety: remove incompatible old master schema
+    try:
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(master_role)").fetchall()]
+        if cols and "role" not in cols:
+            for t in ["role","project_type","project_status","meeting_type","meeting_location","activity_type","priority","mapping_status","task_status","phase","project_size","workload_status"]:
+                cur.execute(f"DROP TABLE IF EXISTS master_{t}")
+    except Exception:
+        pass
+
     # Master tables sesuai struktur SETUP.xlsx
     schemas = {
         "role": "role TEXT",
