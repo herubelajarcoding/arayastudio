@@ -1,5 +1,6 @@
 
 import sqlite3
+import re
 from pathlib import Path
 from datetime import date, datetime, time, timedelta
 import calendar
@@ -1708,105 +1709,80 @@ def weekly_dashboard():
 
 
 
+
 # ============================================================
-# V3B DATABASE FOUNDATION
+# V3B DATABASE FOUNDATION V4
+# Master reference database from SETUP.xlsx
 # ============================================================
-# SETUP.xlsx is used only as initial seed.
-# After database creation, application reads SQLite database.
 
 DB_FILE = "araya.db"
 SETUP_FILE = "SETUP.xlsx"
 
-
+MASTER_CONFIG = {
+    "ROLE MASTER": ["role"],
+    "PROJECT TYPE": ["project_type"],
+    "PHASE MASTER": ["phase", "sequence", "base_load"],
+    "PROJECT STATUS": ["status"],
+    "MEETING TYPE": ["meeting_type"],
+    "MEETING LOCATION": ["location"],
+    "ACTIVITY TYPE": ["activity_type"],
+    "PRIORITY": ["priority"],
+    "PROJECT SIZE MULTIPLIER": ["project_size", "multiplier"],
+    "WORKLOAD STATUS": ["status", "max_load"],
+    "MAPPING STATUS": ["status"],
+    "MONTH MASTER": ["month", "start_date"],
+    "TASK STATUS": ["status"],
+}
 
 def init_master_database():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
 
-    # Ensure database schema is compatible with current version
-    cur.execute("""
-        SELECT name FROM sqlite_master
-        WHERE type='table' AND name='master_setup'
-    """)
-    exists = cur.fetchone()
-
-    rebuild = False
-
-    if exists:
-        cols = [
-            row[1] for row in cur.execute(
-                "PRAGMA table_info(master_setup)"
-            ).fetchall()
-        ]
-        if "master_name" not in cols or "value" not in cols:
-            rebuild = True
-
-    if rebuild:
-        cur.execute("DROP TABLE IF EXISTS master_setup")
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS master_setup (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            master_name TEXT NOT NULL,
-            value TEXT NOT NULL
-        )
-    """)
-
-    count = cur.execute(
-        "SELECT COUNT(*) FROM master_setup"
-    ).fetchone()[0]
-
-    if count == 0:
-        try:
-            df = pd.read_excel(
-                SETUP_FILE,
-                sheet_name="Setup",
-                header=None
+    for name, cols in MASTER_CONFIG.items():
+        table = "master_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+        col_sql = ", ".join([f"{c} TEXT" for c in cols])
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                {col_sql}
             )
+        """)
 
-            # Excel setup consists of horizontal master blocks.
-            # Row 0 = master title, row 1 = header, row 2+ = values.
-            for col in range(df.shape[1]):
-                master = df.iloc[0, col]
-
-                if pd.isna(master):
+        count = cur.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        if count == 0:
+            try:
+                df = pd.read_excel(SETUP_FILE, sheet_name="Setup", header=None)
+                target_col = None
+                for c in range(df.shape[1]):
+                    if str(df.iloc[0,c]).strip().upper() == name:
+                        target_col = c
+                        break
+                if target_col is None:
                     continue
 
-                master = str(master).strip()
-
-                for val in df.iloc[2:, col]:
-                    if pd.notna(val) and str(val).strip():
+                # first column is enough for simple masters
+                for r in range(2, len(df)):
+                    vals = []
+                    for offset in range(len(cols)):
+                        v = df.iloc[r, target_col+offset]
+                        vals.append(None if pd.isna(v) else str(v))
+                    if any(vals):
+                        placeholders = ",".join(["?"]*len(cols))
                         cur.execute(
-                            """
-                            INSERT INTO master_setup
-                            (master_name, value)
-                            VALUES (?,?)
-                            """,
-                            (master, str(val).strip())
+                            f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})",
+                            vals
                         )
-
-        except Exception as e:
-            print("Master import error:", e)
+            except Exception as e:
+                print("Import error", name, e)
 
     conn.commit()
     conn.close()
 
 
-def get_master_setup(master=None):
+def get_master_table(name):
     conn = sqlite3.connect(DB_FILE)
-
-    if master:
-        df = pd.read_sql_query(
-            "SELECT value FROM master_setup WHERE master_name=?",
-            conn,
-            params=(master,)
-        )
-    else:
-        df = pd.read_sql_query(
-            "SELECT master_name,value FROM master_setup",
-            conn
-        )
-
+    table = "master_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
     conn.close()
     return df
 
@@ -1814,27 +1790,21 @@ def get_master_setup(master=None):
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="app-subtitle">Master reference database. SETUP.xlsx hanya digunakan saat inisialisasi awal.</div>',
+        '<div class="app-subtitle">Master reference database. SETUP.xlsx hanya digunakan saat inisialisasi.</div>',
         unsafe_allow_html=True,
     )
 
-    masters = get_master_setup()["master_name"].drop_duplicates().tolist()
+    tabs = st.tabs(list(MASTER_CONFIG.keys()))
 
-    tabs = st.tabs(masters)
-
-    for tab, master in zip(tabs, masters):
+    for tab, master in zip(tabs, MASTER_CONFIG.keys()):
         with tab:
             st.markdown(f"### {master}")
-
-            df = get_master_setup(master)
-
             st.dataframe(
-                df,
+                get_master_table(master),
                 use_container_width=True,
                 hide_index=True
             )
-
-            st.caption("Data tersimpan pada database master.")
+            st.caption("Data berasal dari database master.")
 
 
 # ------------------------------------------------------------
