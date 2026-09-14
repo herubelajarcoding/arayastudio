@@ -593,6 +593,17 @@ def init_db():
             value TEXT NOT NULL,
             PRIMARY KEY(category, value)
         );
+
+        CREATE TABLE IF NOT EXISTS staff_allocation (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            staff TEXT NOT NULL,
+            role_on_project TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(project_id, phase, staff)
+        );
         """
     )
     conn.commit()
@@ -2002,6 +2013,643 @@ def setup_page():
                             if ok: st.rerun()
 
 
+# ============================================================
+# V4 — INPUT DATA
+# ============================================================
+# Input Data is the operational layer. Dropdowns read directly
+# from the Setup master tables, so Setup CRUD changes propagate
+# automatically to these forms.
+
+def master_values(table, field):
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            f"SELECT {field} FROM master_{table} "
+            f"WHERE TRIM(COALESCE({field},''))<>'' ORDER BY id"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    return [r[0] for r in rows]
+
+
+def db_df(sql, params=()):
+    conn=get_conn()
+    df=pd.read_sql_query(sql,conn,params=params)
+    conn.close()
+    return df
+
+
+def ensure_v4_input_schema():
+    conn=get_conn()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_allocation (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            staff TEXT NOT NULL,
+            role_on_project TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(project_id, phase, staff)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def _select_or_empty(label, options, key=None, index=0, help=None):
+    opts=list(options)
+    if not opts:
+        st.warning(f"Belum ada master data untuk {label}. Silakan isi di Setup.")
+        return ""
+    return st.selectbox(label, opts, index=min(index,len(opts)-1), key=key, help=help)
+
+
+def _project_options():
+    df=db_df("SELECT id,name FROM projects ORDER BY id")
+    return df
+
+
+def _staff_options():
+    return db_df("SELECT name,category,primary_role,active FROM staff ORDER BY name")
+
+
+def _project_name(pid):
+    if not pid: return ""
+    conn=get_conn()
+    row=conn.execute("SELECT name FROM projects WHERE id=?",(pid,)).fetchone()
+    conn.close()
+    return row[0] if row else ""
+
+
+def _add_team():
+    st.markdown("### Add Team Member")
+    with st.form("v4_add_team", clear_on_submit=True):
+        c1,c2,c3=st.columns(3)
+        with c1:
+            name=st.text_input("Staff Name *")
+            category=st.selectbox("Category", ["Permanent","Intern"])
+        with c2:
+            roles=master_values("role","role")
+            role=_select_or_empty("Primary Role *",roles)
+            active=st.checkbox("Active",value=True)
+        with c3:
+            intern_start=st.date_input("Intern Start", value=None)
+            intern_end=st.date_input("Intern End", value=None)
+        save=st.form_submit_button("Save Team Member",type="primary",use_container_width=True)
+    if save:
+        if not name.strip() or not role:
+            st.error("Staff Name dan Primary Role wajib diisi.")
+            return
+        if category!="Intern":
+            intern_start=None; intern_end=None
+        elif intern_start and intern_end and intern_end < intern_start:
+            st.error("Intern End tidak boleh lebih awal dari Intern Start.")
+            return
+        conn=get_conn()
+        try:
+            conn.execute("""INSERT INTO staff
+                (name,category,primary_role,intern_start,intern_end,active)
+                VALUES (?,?,?,?,?,?)""",
+                (name.strip(),category,role,
+                 intern_start.isoformat() if intern_start else None,
+                 intern_end.isoformat() if intern_end else None,
+                 1 if active else 0))
+            conn.commit()
+            st.success("Team member berhasil ditambahkan.")
+            st.rerun()
+        except sqlite3.IntegrityError:
+            st.error("Staff Name sudah ada.")
+        finally: conn.close()
+
+
+def _edit_team(df):
+    if df.empty: return
+    st.markdown("### Edit Team Member")
+    ids=df["id"].tolist()
+    labels={int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Team Member",ids,format_func=lambda x:labels[int(x)],key="v4_team_edit_id")
+    row=df[df.id==rid].iloc[0]
+    with st.form("v4_edit_team"):
+        c1,c2,c3=st.columns(3)
+        with c1:
+            name=st.text_input("Staff Name *",value=clean(row["name"]))
+            cats=["Permanent","Intern"]
+            category=st.selectbox("Category",cats,index=cats.index(row["category"]) if row["category"] in cats else 0)
+        with c2:
+            roles=master_values("role","role")
+            role=_select_or_empty("Primary Role *",roles,index=roles.index(row["primary_role"]) if row["primary_role"] in roles else 0)
+            active=st.checkbox("Active",value=bool(row["active"]))
+        with c3:
+            sd=pd.to_datetime(row["intern_start"]).date() if row["intern_start"] else None
+            ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
+            intern_start=st.date_input("Intern Start",value=sd)
+            intern_end=st.date_input("Intern End",value=ed)
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        if not name.strip() or not role:
+            st.error("Staff Name dan Primary Role wajib diisi."); return
+        if category!="Intern": intern_start=None; intern_end=None
+        if category=="Intern" and intern_start and intern_end and intern_end<intern_start:
+            st.error("Intern End tidak boleh lebih awal dari Intern Start."); return
+        conn=get_conn()
+        try:
+            conn.execute("""UPDATE staff SET name=?,category=?,primary_role=?,
+                intern_start=?,intern_end=?,active=? WHERE id=?""",
+                (name.strip(),category,role,
+                 intern_start.isoformat() if intern_start else None,
+                 intern_end.isoformat() if intern_end else None,
+                 1 if active else 0,int(rid)))
+            conn.commit(); st.success("Data berhasil diperbarui."); st.rerun()
+        except sqlite3.IntegrityError:
+            st.error("Staff Name sudah digunakan.")
+        finally: conn.close()
+
+
+def _delete_team(df):
+    if df.empty: return
+    st.markdown("### Delete Team Member")
+    labels={int(r.id):f"{r['name']} • {r['primary_role']}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Team Member",list(labels),format_func=lambda x:labels[x],key="v4_team_del_id")
+    if st.button("Delete Permanently",key="v4_team_delete",type="secondary"):
+        conn=get_conn()
+        conn.execute("UPDATE staff SET active=0 WHERE id=?",(int(rid),))
+        conn.commit(); conn.close()
+        st.success("Team member dinonaktifkan."); st.rerun()
+
+
+def input_team_page():
+    st.markdown('<div class="app-title">Input Team</div>',unsafe_allow_html=True)
+    st.markdown("Manage team members used throughout the Control Board.")
+    df=db_df("SELECT id,name,category,primary_role,intern_start,intern_end,active FROM staff ORDER BY name")
+    st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
+    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    with a: _add_team()
+    with e: _edit_team(df)
+    with d: _delete_team(df)
+
+
+def _project_duration(start,finish):
+    if not start or not finish: return None
+    return (finish.year-start.year)*12+finish.month-start.month+1
+
+
+def _add_project():
+    st.markdown("### Add Project")
+    pdf=_project_options()
+    with st.form("v4_add_project",clear_on_submit=True):
+        c1,c2,c3=st.columns(3)
+        with c1:
+            pid=st.text_input("Project ID *")
+            name=st.text_input("Project Name *")
+            ptypes=master_values("project_type","project_type")
+            ptype=_select_or_empty("Project Type",ptypes)
+        with c2:
+            start=st.date_input("Start Date")
+            finish=st.date_input("Target Finish")
+            sizes=master_values("project_size","project_size")
+            size=_select_or_empty("Project Size",sizes)
+        with c3:
+            statuses=master_values("project_status","status")
+            status=_select_or_empty("Project Status",statuses)
+            staff=_staff_options()
+            leads=staff["name"].tolist() if not staff.empty else []
+            lead=_select_or_empty("Lead",leads)
+            duration=_project_duration(start,finish)
+            st.caption(f"Duration: {duration or '—'} month(s)")
+        save=st.form_submit_button("Save Project",type="primary",use_container_width=True)
+    if save:
+        if not pid.strip() or not name.strip():
+            st.error("Project ID dan Project Name wajib diisi."); return
+        if finish<start:
+            st.error("Target Finish tidak boleh lebih awal dari Start Date."); return
+        conn=get_conn()
+        try:
+            conn.execute("""INSERT INTO projects
+                (id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (pid.strip(),name.strip(),ptype,start.isoformat(),finish.isoformat(),
+                 _project_duration(start,finish),status,lead,size))
+            conn.commit(); st.success("Project berhasil ditambahkan."); st.rerun()
+        except sqlite3.IntegrityError:
+            st.error("Project ID sudah ada.")
+        finally: conn.close()
+
+
+def _edit_project(df):
+    if df.empty: return
+    labels={str(r.id):f"{r.id} • {r['name']}" for _,r in df.iterrows()}
+    pid=st.selectbox("Select Project",list(labels),format_func=lambda x:labels[x],key="v4_proj_edit_id")
+    row=df[df.id==pid].iloc[0]
+    with st.form("v4_edit_project"):
+        c1,c2,c3=st.columns(3)
+        with c1:
+            name=st.text_input("Project Name *",value=clean(row["name"]))
+            ptypes=master_values("project_type","project_type")
+            ptype=_select_or_empty("Project Type",ptypes,index=ptypes.index(row["project_type"]) if row["project_type"] in ptypes else 0)
+        with c2:
+            start=pd.to_datetime(row["start_date"]).date() if row["start_date"] else date.today()
+            finish=pd.to_datetime(row["target_finish"]).date() if row["target_finish"] else start
+            start=st.date_input("Start Date",value=start)
+            finish=st.date_input("Target Finish",value=finish)
+            sizes=master_values("project_size","project_size")
+            size=_select_or_empty("Project Size",sizes,index=sizes.index(row["project_size"]) if row["project_size"] in sizes else 0)
+        with c3:
+            statuses=master_values("project_status","status")
+            status=_select_or_empty("Project Status",statuses,index=statuses.index(row["status"]) if row["status"] in statuses else 0)
+            sdf=_staff_options(); leads=sdf["name"].tolist() if not sdf.empty else []
+            lead=_select_or_empty("Lead",leads,index=leads.index(row["lead"]) if row["lead"] in leads else 0)
+            st.caption(f"Duration: {_project_duration(start,finish) or '—'} month(s)")
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        if not name.strip(): st.error("Project Name wajib diisi."); return
+        if finish<start: st.error("Target Finish tidak boleh lebih awal dari Start Date."); return
+        conn=get_conn()
+        conn.execute("""UPDATE projects SET name=?,project_type=?,start_date=?,target_finish=?,
+            duration_months=?,status=?,lead=?,project_size=? WHERE id=?""",
+            (name.strip(),ptype,start.isoformat(),finish.isoformat(),_project_duration(start,finish),
+             status,lead,size,pid))
+        conn.commit(); conn.close(); st.success("Project berhasil diperbarui."); st.rerun()
+
+
+def _delete_project(df):
+    if df.empty:return
+    labels={str(r.id):f"{r.id} • {r['name']}" for _,r in df.iterrows()}
+    pid=st.selectbox("Select Project to Delete",list(labels),format_func=lambda x:labels[x],key="v4_proj_del_id")
+    if st.button("Delete Permanently",key="v4_proj_delete",type="secondary"):
+        conn=get_conn()
+        # Do not silently remove linked activities. Mark project archived instead.
+        archived=master_values("project_status","status")
+        status="Archived" if "Archived" in archived else (archived[-1] if archived else "Archived")
+        conn.execute("UPDATE projects SET status=? WHERE id=?",(status,pid))
+        conn.commit(); conn.close(); st.success("Project diarsipkan agar histori aktivitas tetap aman."); st.rerun()
+
+
+def input_project_page():
+    st.markdown('<div class="app-title">Input Project</div>',unsafe_allow_html=True)
+    st.markdown("Manage projects used by allocation, activities and dashboards.")
+    df=db_df("""SELECT id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size
+                FROM projects ORDER BY id""")
+    st.dataframe(df,use_container_width=True,hide_index=True)
+    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    with a:_add_project()
+    with e:_edit_project(df)
+    with d:_delete_project(df)
+
+
+def allocation_calc(project_id, phase, staff):
+    conn=get_conn()
+    prow=conn.execute("SELECT project_size FROM projects WHERE id=?",(project_id,)).fetchone()
+    srow=conn.execute("SELECT multiplier FROM master_project_size WHERE project_size=?",(prow[0],)).fetchone() if prow else None
+    prow2=conn.execute("SELECT base_load FROM master_phase WHERE phase=?",(phase,)).fetchone()
+    mult=float(srow[0]) if srow else 1.0
+    weight=float(prow2[0]) if prow2 else 0.0
+    total=mult*weight
+    count=conn.execute("SELECT COUNT(*) FROM staff_allocation WHERE project_id=? AND phase=?",(project_id,phase)).fetchone()[0]
+    conn.close()
+    return mult,weight,total,count+1,total/(count+1) if count+1 else 0
+
+
+def _allocation_df():
+    return db_df("""
+        SELECT a.id,a.project_id,p.name AS project_name,a.phase,a.staff,
+               s.category AS staff_category,s.primary_role,a.role_on_project,
+               p.project_size
+        FROM staff_allocation a
+        LEFT JOIN projects p ON p.id=a.project_id
+        LEFT JOIN staff s ON s.name=a.staff
+        ORDER BY a.project_id,a.phase,a.staff
+    """)
+
+
+def _add_allocation():
+    projects=_project_options()
+    staff=_staff_options()
+    if projects.empty: st.warning("Buat Project terlebih dahulu."); return
+    if staff.empty: st.warning("Isi Team terlebih dahulu."); return
+    pids=projects["id"].tolist()
+    people=staff["name"].tolist()
+    phases=master_values("phase","phase")
+    with st.form("v4_add_allocation",clear_on_submit=True):
+        c1,c2=st.columns(2)
+        with c1:
+            pid=st.selectbox("Project ID *",pids)
+            phase=_select_or_empty("Phase *",phases)
+        with c2:
+            person=st.selectbox("Staff *",people)
+            roles=master_values("role","role")
+            role=_select_or_empty("Role on Project",roles)
+        notes=st.text_area("Notes")
+        if pid and phase:
+            mult,weight,total,count,individual=allocation_calc(pid,phase,person)
+            st.caption(f"Size Multiplier {mult:g}  •  Phase Weight {weight:g}  •  Total Phase Load {total:g}  •  Assigned Staff {count}  •  Individual Load {individual:g}")
+        save=st.form_submit_button("Save Allocation",type="primary",use_container_width=True)
+    if save:
+        conn=get_conn()
+        try:
+            conn.execute("""INSERT INTO staff_allocation(project_id,phase,staff,role_on_project,notes)
+                            VALUES (?,?,?,?,?)""",(pid,phase,person,role,notes))
+            conn.commit(); st.success("Staff allocation berhasil ditambahkan."); st.rerun()
+        except sqlite3.IntegrityError:
+            st.error("Staff tersebut sudah dialokasikan pada project dan phase yang sama.")
+        finally: conn.close()
+
+
+def _edit_allocation(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.project_id} • {r.phase} • {r.staff}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Allocation",list(labels),format_func=lambda x:labels[x],key="v4_alloc_edit_id")
+    row=df[df.id==rid].iloc[0]
+    projects=_project_options(); staff=_staff_options(); phases=master_values("phase","phase"); roles=master_values("role","role")
+    with st.form("v4_edit_allocation"):
+        pid=st.selectbox("Project ID",projects["id"].tolist(),index=projects["id"].tolist().index(row["project_id"]))
+        phase=_select_or_empty("Phase",phases,index=phases.index(row["phase"]) if row["phase"] in phases else 0)
+        people=staff["name"].tolist()
+        person=st.selectbox("Staff",people,index=people.index(row["staff"]) if row["staff"] in people else 0)
+        role=_select_or_empty("Role on Project",roles,index=roles.index(row["role_on_project"]) if row["role_on_project"] in roles else 0)
+        notes=st.text_area("Notes",value=clean(row.get("notes","")))
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        conn=get_conn()
+        try:
+            conn.execute("""UPDATE staff_allocation SET project_id=?,phase=?,staff=?,role_on_project=?,notes=? WHERE id=?""",
+                         (pid,phase,person,role,notes,int(rid)))
+            conn.commit(); st.success("Allocation diperbarui."); st.rerun()
+        except sqlite3.IntegrityError: st.error("Allocation yang sama sudah ada.")
+        finally: conn.close()
+
+
+def _delete_allocation(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.project_id} • {r.phase} • {r.staff}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Allocation to Delete",list(labels),format_func=lambda x:labels[x],key="v4_alloc_del_id")
+    if st.button("Delete Permanently",key="v4_alloc_delete",type="secondary"):
+        conn=get_conn(); conn.execute("DELETE FROM staff_allocation WHERE id=?",(int(rid),)); conn.commit(); conn.close()
+        st.success("Allocation dihapus."); st.rerun()
+
+
+def input_allocation_page():
+    st.markdown('<div class="app-title">Staff Allocation</div>',unsafe_allow_html=True)
+    st.markdown("Assign staff to a project phase. Load parameters are derived from Setup.")
+    df=_allocation_df()
+    display=df.copy()
+    st.dataframe(display.drop(columns=["id"]),use_container_width=True,hide_index=True)
+    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    with a:_add_allocation()
+    with e:_edit_allocation(df)
+    with d:_delete_allocation(df)
+
+
+def _work_df():
+    return db_df("""SELECT w.id,w.project_id,COALESCE(p.name,'') project_name,
+        w.start_date,w.end_date,w.activity_type,w.task,w.priority,w.pic,w.status,w.notes
+        FROM work_activity w LEFT JOIN projects p ON p.id=w.project_id
+        ORDER BY w.start_date,w.project_id,w.id""")
+
+
+def _add_work():
+    projects=_project_options(); staff=_staff_options()
+    if projects.empty: st.warning("Buat Project terlebih dahulu."); return
+    pids=projects["id"].tolist()
+    people=staff["name"].tolist() if not staff.empty else []
+    ats=master_values("activity_type","activity_type")
+    pris=master_values("priority","priority")
+    statuses=master_values("task_status","status")
+    with st.form("v4_add_work",clear_on_submit=True):
+        c1,c2=st.columns(2)
+        with c1:
+            pid=st.selectbox("Project ID",pids)
+            start=st.date_input("Start Date")
+            end=st.date_input("End Date")
+            at=_select_or_empty("Activity Type",ats)
+        with c2:
+            task=st.text_input("Deliverable / Task *")
+            priority=_select_or_empty("Priority",pris)
+            pic=_select_or_empty("PIC",people)
+            status=_select_or_empty("Status",statuses)
+        notes=st.text_area("Notes")
+        save=st.form_submit_button("Save Activity",type="primary",use_container_width=True)
+    if save:
+        if not task.strip(): st.error("Deliverable / Task wajib diisi."); return
+        if end<start: st.error("End Date tidak boleh lebih awal dari Start Date."); return
+        conn=get_conn()
+        conn.execute("""INSERT INTO work_activity
+            (project_id,start_date,end_date,activity_type,task,priority,pic,status,notes)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+            (pid,start.isoformat(),end.isoformat(),at,task.strip(),priority,pic,status,notes))
+        conn.commit(); conn.close(); st.success("Work activity berhasil ditambahkan."); st.rerun()
+
+
+def _edit_work(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.project_id} • {r.task}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Work Activity",list(labels),format_func=lambda x:labels[x],key="v4_work_edit_id")
+    row=df[df.id==rid].iloc[0]
+    projects=_project_options(); staff=_staff_options()
+    ats=master_values("activity_type","activity_type"); pris=master_values("priority","priority"); sts=master_values("task_status","status")
+    with st.form("v4_edit_work"):
+        pid=st.selectbox("Project ID",projects["id"].tolist(),index=projects["id"].tolist().index(row["project_id"]))
+        sd=pd.to_datetime(row["start_date"]).date() if row["start_date"] else date.today()
+        ed=pd.to_datetime(row["end_date"]).date() if row["end_date"] else sd
+        start=st.date_input("Start Date",value=sd); end=st.date_input("End Date",value=ed)
+        task=st.text_input("Deliverable / Task *",value=clean(row["task"]))
+        at=_select_or_empty("Activity Type",ats,index=ats.index(row["activity_type"]) if row["activity_type"] in ats else 0)
+        priority=_select_or_empty("Priority",pris,index=pris.index(row["priority"]) if row["priority"] in pris else 0)
+        people=staff["name"].tolist() if not staff.empty else []
+        pic=_select_or_empty("PIC",people,index=people.index(row["pic"]) if row["pic"] in people else 0)
+        status=_select_or_empty("Status",sts,index=sts.index(row["status"]) if row["status"] in sts else 0)
+        notes=st.text_area("Notes",value=clean(row["notes"]))
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        if not task.strip():st.error("Deliverable / Task wajib diisi.");return
+        if end<start:st.error("End Date tidak boleh lebih awal dari Start Date.");return
+        conn=get_conn()
+        conn.execute("""UPDATE work_activity SET project_id=?,start_date=?,end_date=?,activity_type=?,
+            task=?,priority=?,pic=?,status=?,notes=? WHERE id=?""",
+            (pid,start.isoformat(),end.isoformat(),at,task.strip(),priority,pic,status,notes,int(rid)))
+        conn.commit();conn.close();st.success("Work activity diperbarui.");st.rerun()
+
+
+def _delete_work(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.project_id} • {r.task}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Work Activity to Delete",list(labels),format_func=lambda x:labels[x],key="v4_work_del_id")
+    if st.button("Delete Permanently",key="v4_work_delete",type="secondary"):
+        conn=get_conn();conn.execute("DELETE FROM work_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Activity dihapus.");st.rerun()
+
+
+def _meeting_df():
+    return db_df("""SELECT m.id,m.activity_date,m.start_time,m.end_time,m.project_id,
+        COALESCE(p.name,'') project_name,m.meeting_type,m.attendee_1,m.attendee_2,m.attendee_3,
+        m.attendee_4,m.location,m.agenda_notes
+        FROM meeting_activity m LEFT JOIN projects p ON p.id=m.project_id
+        ORDER BY m.activity_date,m.start_time,m.id""")
+
+
+def _add_meeting():
+    projects=_project_options(); pids=["No Project"]+(projects["id"].tolist() if not projects.empty else [])
+    types=master_values("meeting_type","meeting_type"); locs=master_values("meeting_location","location")
+    with st.form("v4_add_meeting",clear_on_submit=True):
+        c1,c2=st.columns(2)
+        with c1:
+            d=st.date_input("Date")
+            c3,c4=st.columns(2)
+            with c3: start=st.time_input("Start")
+            with c4: end=st.time_input("End")
+            pid=st.selectbox("Project ID",pids)
+            mt=_select_or_empty("Meeting Type",types)
+        with c2:
+            loc=_select_or_empty("Location",locs)
+            a1=st.text_input("Attendee 1")
+            a2=st.text_input("Attendee 2")
+            a3=st.text_input("Attendee 3")
+            a4=st.text_input("Attendee 4")
+        notes=st.text_area("Agenda / Notes")
+        save=st.form_submit_button("Save Meeting",type="primary",use_container_width=True)
+    if save:
+        if end<start:st.error("End time tidak boleh lebih awal dari Start.");return
+        conn=get_conn()
+        conn.execute("""INSERT INTO meeting_activity
+            (activity_date,start_time,end_time,project_id,meeting_type,attendee_1,attendee_2,attendee_3,attendee_4,location,agenda_notes)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (d.isoformat(),start.strftime("%H:%M"),end.strftime("%H:%M"),
+             None if pid=="No Project" else pid,mt,a1,a2,a3,a4,loc,notes))
+        conn.commit();conn.close();st.success("Meeting berhasil ditambahkan.");st.rerun()
+
+
+def _edit_meeting(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.activity_date} • {r.meeting_type} • {r.project_id or 'No Project'}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Meeting",list(labels),format_func=lambda x:labels[x],key="v4_meet_edit_id")
+    row=df[df.id==rid].iloc[0]; projects=_project_options()
+    pids=["No Project"]+(projects["id"].tolist() if not projects.empty else [])
+    types=master_values("meeting_type","meeting_type");locs=master_values("meeting_location","location")
+    with st.form("v4_edit_meeting"):
+        d=pd.to_datetime(row["activity_date"]).date()
+        d=st.date_input("Date",value=d)
+        def parse_t(v,default):
+            try:return datetime.strptime(str(v),"%H:%M").time()
+            except:return default
+        start=st.time_input("Start",value=parse_t(row["start_time"],time(9,0)))
+        end=st.time_input("End",value=parse_t(row["end_time"],time(10,0)))
+        pid0=row["project_id"] or "No Project"
+        pid=st.selectbox("Project ID",pids,index=pids.index(pid0) if pid0 in pids else 0)
+        mt=_select_or_empty("Meeting Type",types,index=types.index(row["meeting_type"]) if row["meeting_type"] in types else 0)
+        loc=_select_or_empty("Location",locs,index=locs.index(row["location"]) if row["location"] in locs else 0)
+        a1=st.text_input("Attendee 1",value=clean(row["attendee_1"]))
+        a2=st.text_input("Attendee 2",value=clean(row["attendee_2"]))
+        a3=st.text_input("Attendee 3",value=clean(row["attendee_3"]))
+        a4=st.text_input("Attendee 4",value=clean(row["attendee_4"]))
+        notes=st.text_area("Agenda / Notes",value=clean(row["agenda_notes"]))
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        if end<start:st.error("End time tidak boleh lebih awal dari Start.");return
+        conn=get_conn()
+        conn.execute("""UPDATE meeting_activity SET activity_date=?,start_time=?,end_time=?,project_id=?,meeting_type=?,
+            attendee_1=?,attendee_2=?,attendee_3=?,attendee_4=?,location=?,agenda_notes=? WHERE id=?""",
+            (d.isoformat(),start.strftime("%H:%M"),end.strftime("%H:%M"),None if pid=="No Project" else pid,mt,a1,a2,a3,a4,loc,notes,int(rid)))
+        conn.commit();conn.close();st.success("Meeting diperbarui.");st.rerun()
+
+
+def _delete_meeting(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.activity_date} • {r.meeting_type}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Meeting to Delete",list(labels),format_func=lambda x:labels[x],key="v4_meet_del_id")
+    if st.button("Delete Permanently",key="v4_meet_delete",type="secondary"):
+        conn=get_conn();conn.execute("DELETE FROM meeting_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Meeting dihapus.");st.rerun()
+
+
+def _other_df():
+    return db_df("""SELECT id,activity_date,activity,related_staff,notes
+                    FROM other_activity ORDER BY activity_date,id""")
+
+
+def _add_other():
+    sdf=_staff_options(); people=["No Specific Staff"]+(sdf["name"].tolist() if not sdf.empty else [])
+    with st.form("v4_add_other",clear_on_submit=True):
+        d=st.date_input("Date")
+        activity=st.text_input("Other Activity *")
+        person=st.selectbox("Related Staff",people)
+        notes=st.text_area("Notes")
+        save=st.form_submit_button("Save Activity",type="primary",use_container_width=True)
+    if save:
+        if not activity.strip():st.error("Other Activity wajib diisi.");return
+        conn=get_conn()
+        conn.execute("INSERT INTO other_activity(activity_date,activity,related_staff,notes) VALUES (?,?,?,?)",
+                     (d.isoformat(),activity.strip(),None if person=="No Specific Staff" else person,notes))
+        conn.commit();conn.close();st.success("Other activity berhasil ditambahkan.");st.rerun()
+
+
+def _edit_other(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.activity_date} • {r.activity}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Other Activity",list(labels),format_func=lambda x:labels[x],key="v4_other_edit_id")
+    row=df[df.id==rid].iloc[0]
+    sdf=_staff_options();people=["No Specific Staff"]+(sdf["name"].tolist() if not sdf.empty else [])
+    p0=row["related_staff"] or "No Specific Staff"
+    with st.form("v4_edit_other"):
+        d=pd.to_datetime(row["activity_date"]).date()
+        d=st.date_input("Date",value=d)
+        activity=st.text_input("Other Activity *",value=clean(row["activity"]))
+        person=st.selectbox("Related Staff",people,index=people.index(p0) if p0 in people else 0)
+        notes=st.text_area("Notes",value=clean(row["notes"]))
+        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+    if save:
+        if not activity.strip():st.error("Other Activity wajib diisi.");return
+        conn=get_conn()
+        conn.execute("UPDATE other_activity SET activity_date=?,activity=?,related_staff=?,notes=? WHERE id=?",
+                     (d.isoformat(),activity.strip(),None if person=="No Specific Staff" else person,notes,int(rid)))
+        conn.commit();conn.close();st.success("Other activity diperbarui.");st.rerun()
+
+
+def _delete_other(df):
+    if df.empty:return
+    labels={int(r.id):f"{r.activity_date} • {r.activity}" for _,r in df.iterrows()}
+    rid=st.selectbox("Select Other Activity to Delete",list(labels),format_func=lambda x:labels[x],key="v4_other_del_id")
+    if st.button("Delete Permanently",key="v4_other_delete",type="secondary"):
+        conn=get_conn();conn.execute("DELETE FROM other_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Other activity dihapus.");st.rerun()
+
+
+def input_activities_page():
+    st.markdown('<div class="app-title">Activities</div>',unsafe_allow_html=True)
+    st.markdown("Operational activities feeding the Weekly Dashboard.")
+    t1,t2,t3=st.tabs(["Work Activity","Meeting Activity","Other Activities"])
+    with t1:
+        df=_work_df();st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
+        a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+        with a:_add_work()
+        with e:_edit_work(df)
+        with d:_delete_work(df)
+    with t2:
+        df=_meeting_df();st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
+        a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+        with a:_add_meeting()
+        with e:_edit_meeting(df)
+        with d:_delete_meeting(df)
+    with t3:
+        df=_other_df();st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
+        a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+        with a:_add_other()
+        with e:_edit_other(df)
+        with d:_delete_other(df)
+
+
+def input_data_page(submodule):
+    ensure_v4_input_schema()
+    if submodule=="Input Team":
+        input_team_page()
+    elif submodule=="Input Project":
+        input_project_page()
+    elif submodule=="Staff Allocation":
+        input_allocation_page()
+    elif submodule=="Activities":
+        input_activities_page()
+    else:
+        input_team_page()
+
+
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION — V3A STATIC TREE
 # ------------------------------------------------------------
@@ -2087,6 +2735,7 @@ if st.sidebar.button(
 
 init_db()
 init_master_database()
+ensure_v4_input_schema()
 
 module = st.session_state.v3a_module
 
