@@ -447,8 +447,6 @@ st.markdown(
         .kpi-row {grid-template-columns:1fr;}
     }
     /* Setup tabs: horizontal scrolling prevents master names from being clipped. */
-
-    /* V3 UI FIX — responsive master/input navigation */
     .stTabs [data-baseweb="tab-list"] {
         display: flex !important;
         flex-wrap: nowrap !important;
@@ -496,7 +494,43 @@ st.markdown(
     .stTabs [data-baseweb="tab-list"] > div { flex-wrap: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab"] { flex: 0 0 auto !important; white-space: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
-    </style>
+    
+    /* V3 UI FIX — no clipped headers/navigation */
+    section.main .block-container {
+        padding-top: 2.1rem !important;
+        padding-left: 2.1rem !important;
+        padding-right: 2.1rem !important;
+        max-width: 100% !important;
+    }
+    .setup-master-label {
+        margin-top: 1rem;
+        margin-bottom: .55rem;
+        color: #98A2B3;
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .10em;
+    }
+    /* Setup master selector: compact, readable, 4-column responsive grid. */
+    .setup-master-label + div [data-testid="stHorizontalBlock"] {
+        margin-bottom: .35rem !important;
+    }
+    .setup-master-label + div button,
+    .setup-master-label ~ div button {
+        white-space: normal !important;
+        min-height: 2.45rem !important;
+        line-height: 1.15 !important;
+    }
+    /* Generic input pages: prevent horizontal clipping. */
+    [data-testid="stHorizontalBlock"] {
+        max-width: 100% !important;
+    }
+    [data-testid="stForm"] {
+        max-width: 100% !important;
+    }
+    .stDataFrame, [data-testid="stDataFrame"] {
+        max-width: 100% !important;
+    }
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -1950,72 +1984,76 @@ def setup_page():
     )
 
     names = list(SETUP_CRUD.keys())
-    tabs = st.tabs(names)
 
-    for tab, label in zip(tabs, names):
-        with tab:
-            table, fields = SETUP_CRUD[label]
-            df = get_master_table(table)
+    # Responsive master navigation: 4 items per row, no clipped tab labels.
+    if "setup_master_selected" not in st.session_state:
+        st.session_state.setup_master_selected = names[0]
 
-            st.markdown(f"### {label}")
+    st.markdown('<div class="setup-master-label">MASTER DATA</div>', unsafe_allow_html=True)
+    for row_start in range(0, len(names), 4):
+        row_names = names[row_start:row_start+4]
+        cols = st.columns(4)
+        for col, label in zip(cols, row_names):
+            with col:
+                selected = st.session_state.setup_master_selected == label
+                if st.button(
+                    label,
+                    key=f"setup_master_nav_{row_start}_{label}",
+                    type="primary" if selected else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state.setup_master_selected = label
+                    st.rerun()
 
-            visible = df.drop(columns=["id"], errors="ignore")
-            st.dataframe(visible, use_container_width=True, hide_index=True)
+    label = st.session_state.setup_master_selected
+    table, fields = SETUP_CRUD[label]
+    df = get_master_table(table)
 
-            add_col, edit_col, delete_col = st.columns(3)
+    st.markdown(f"### {label}")
 
-            with add_col:
-                with st.expander("＋ Add", expanded=False):
-                    with st.form(f"add_{table}", clear_on_submit=True):
-                        vals = _crud_values(fields, f"add_{table}")
-                        if st.form_submit_button("Save New", type="primary", use_container_width=True):
-                            if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
-                                st.error("Field wajib diisi.")
-                            else:
-                                ok,msg=_crud_add(table,fields,vals)
-                                (st.success if ok else st.error)(msg)
-                                if ok: st.rerun()
+    visible = df.drop(columns=["id"], errors="ignore")
+    st.dataframe(visible, use_container_width=True, hide_index=True)
 
-            if not df.empty:
-                labels={int(r.id):" • ".join(str(r[f]) for f,_,_ in fields) for _,r in df.iterrows()}
+    add_col, edit_col, delete_col = st.columns(3)
 
-                with edit_col:
-                    with st.expander("✎ Edit", expanded=False):
-                        rid=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"edit_sel_{table}")
-                        row=df[df.id==rid].iloc[0].to_dict()
-                        with st.form(f"edit_{table}"):
-                            vals=_crud_values(fields,f"edit_{table}",row)
-                            if st.form_submit_button("Save Changes",type="primary",use_container_width=True):
-                                if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
-                                    st.error("Field wajib diisi.")
-                                else:
-                                    ok,msg=_crud_update(table,fields,int(rid),vals)
-                                    (st.success if ok else st.error)(msg)
-                                    if ok: st.rerun()
+    with add_col:
+        with st.expander("＋ Add", expanded=False):
+            with st.form(f"add_{table}", clear_on_submit=True):
+                vals = _crud_values(fields, f"add_{table}")
+                if st.form_submit_button("Save New", type="primary", use_container_width=True):
+                    if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
+                        st.error("Field wajib diisi.")
+                    else:
+                        ok,msg=_crud_add(table,fields,vals)
+                        (st.success if ok else st.error)(msg)
+                        if ok: st.rerun()
 
-                with delete_col:
-                    with st.expander("🗑 Delete", expanded=False):
-                        rid2=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"del_sel_{table}")
-                        confirm=st.checkbox("Confirm deletion",key=f"del_confirm_{table}")
-                        if st.button("Delete Permanently",key=f"del_btn_{table}",disabled=not confirm,use_container_width=True):
-                            ok,msg=_crud_delete(table,int(rid2))
+    if not df.empty:
+        labels={int(r.id):" • ".join(str(r[f]) for f,_,_ in fields) for _,r in df.iterrows()}
+
+        with edit_col:
+            with st.expander("✎ Edit", expanded=False):
+                rid=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"edit_sel_{table}")
+                row=df[df.id==rid].iloc[0].to_dict()
+                with st.form(f"edit_{table}"):
+                    vals=_crud_values(fields,f"edit_{table}",row)
+                    if st.form_submit_button("Save Changes",type="primary",use_container_width=True):
+                        if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
+                            st.error("Field wajib diisi.")
+                        else:
+                            ok,msg=_crud_update(table,fields,int(rid),vals)
                             (st.success if ok else st.error)(msg)
                             if ok: st.rerun()
 
+        with delete_col:
+            with st.expander("🗑 Delete", expanded=False):
+                rid2=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"del_sel_{table}")
+                confirm=st.checkbox("Confirm deletion",key=f"del_confirm_{table}")
+                if st.button("Delete Permanently",key=f"del_btn_{table}",disabled=not confirm,use_container_width=True):
+                    ok,msg=_crud_delete(table,int(rid2))
+                    (st.success if ok else st.error)(msg)
+                    if ok: st.rerun()
 
-# Future Input Data modules should read these master tables directly.
-def master_options(table, field):
-    conn = sqlite3.connect(DB_FILE)
-    rows = conn.execute(
-        f"SELECT {field} FROM master_{table} ORDER BY id"
-    ).fetchall()
-    conn.close()
-    return [r[0] for r in rows]
-
-
-def input_data_page(submodule):
-    st.markdown('<div class="app-title">Input Data</div>', unsafe_allow_html=True)
-    st.info(f"{submodule} is the next module to be connected to the master database.")
 
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION — V3A STATIC TREE
