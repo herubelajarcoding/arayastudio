@@ -446,27 +446,11 @@ st.markdown(
     @media (max-width: 560px) {
         .kpi-row {grid-template-columns:1fr;}
     }
-    /* Setup Manager tabs: keep all masters accessible without clipping. */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: .35rem;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        flex-wrap: nowrap !important;
-        scrollbar-width: thin;
-        padding-bottom: .18rem;
-    }
-    .stTabs [data-baseweb="tab-list"] > div {
-        flex-wrap: nowrap !important;
-        min-width: max-content !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        flex: 0 0 auto !important;
-        white-space: nowrap !important;
-        min-width: max-content !important;
-        padding-left: .7rem !important;
-        padding-right: .7rem !important;
-    }
-    .stTabs [data-baseweb="tab-highlight"] { min-width: 100% !important; }
+    /* Setup tabs: horizontal scrolling prevents master names from being clipped. */
+    .stTabs [data-baseweb="tab-list"] { overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important; gap: .3rem !important; }
+    .stTabs [data-baseweb="tab-list"] > div { flex-wrap: nowrap !important; min-width: max-content !important; }
+    .stTabs [data-baseweb="tab"] { flex: 0 0 auto !important; white-space: nowrap !important; min-width: max-content !important; }
+    .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -896,9 +880,6 @@ def get_staff():
 
 def get_refs(category):
     conn = get_conn()
-    if not table_exists(conn, "reference_values"):
-        conn.close()
-        return []
     rows = conn.execute(
         "SELECT value FROM reference_values WHERE category=? ORDER BY rowid",
         (category,),
@@ -1819,293 +1800,177 @@ def init_master_database():
     conn.close()
 
 
+
 def get_master_table(name):
-    conn=sqlite3.connect(DB_FILE)
-    df=pd.read_sql_query(f"SELECT * FROM master_{name}",conn)
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query(f"SELECT * FROM master_{name} ORDER BY id", conn)
     conn.close()
     return df
 
 
-# ============================================================
-# SETUP MASTER MANAGER — CRUD
-# ============================================================
-
-SETUP_SPECS = {
-    "Role": {
-        "table": "role",
-        "columns": [("role", "Role", "text")],
-    },
-    "Project Type": {
-        "table": "project_type",
-        "columns": [("project_type", "Project Type", "text")],
-    },
-    "Phase": {
-        "table": "phase",
-        "columns": [
-            ("phase", "Phase", "text"),
-            ("sequence", "Sequence", "int"),
-            ("base_load", "Base Load", "float"),
-        ],
-    },
-    "Project Status": {
-        "table": "project_status",
-        "columns": [("status", "Status", "text")],
-    },
-    "Meeting Type": {
-        "table": "meeting_type",
-        "columns": [("meeting_type", "Meeting Type", "text")],
-    },
-    "Meeting Location": {
-        "table": "meeting_location",
-        "columns": [("location", "Location", "text")],
-    },
-    "Activity Type": {
-        "table": "activity_type",
-        "columns": [("activity_type", "Activity Type", "text")],
-    },
-    "Priority": {
-        "table": "priority",
-        "columns": [("priority", "Priority", "text")],
-    },
-    "Project Size": {
-        "table": "project_size",
-        "columns": [
-            ("project_size", "Project Size", "text"),
-            ("multiplier", "Multiplier", "float"),
-        ],
-    },
-    "Workload Status": {
-        "table": "workload_status",
-        "columns": [
-            ("status", "Status", "text"),
-            ("max_load", "Max Load", "float"),
-        ],
-    },
-    "Mapping Status": {
-        "table": "mapping_status",
-        "columns": [("status", "Status", "text")],
-    },
-    "Task Status": {
-        "table": "task_status",
-        "columns": [("status", "Status", "text")],
-    },
+SETUP_CRUD = {
+    "Role": ("role", [("role", "Role", "text")]),
+    "Project Type": ("project_type", [("project_type", "Project Type", "text")]),
+    "Phase": ("phase", [("phase", "Phase", "text"), ("sequence", "Sequence", "int"), ("base_load", "Base Load", "float")]),
+    "Project Status": ("project_status", [("status", "Status", "text")]),
+    "Meeting Type": ("meeting_type", [("meeting_type", "Meeting Type", "text")]),
+    "Meeting Location": ("meeting_location", [("location", "Location", "text")]),
+    "Activity Type": ("activity_type", [("activity_type", "Activity Type", "text")]),
+    "Priority": ("priority", [("priority", "Priority", "text")]),
+    "Project Size": ("project_size", [("project_size", "Project Size", "text"), ("multiplier", "Multiplier", "float")]),
+    "Workload Status": ("workload_status", [("status", "Status", "text"), ("max_load", "Max Load", "float")]),
+    "Mapping Status": ("mapping_status", [("status", "Status", "text")]),
+    "Task Status": ("task_status", [("status", "Status", "text")]),
 }
 
 
-def _setup_read(name):
-    spec = SETUP_SPECS[name]
-    conn = sqlite3.connect(DB_FILE)
-    fields = ", ".join(c[0] for c in spec["columns"])
-    df = pd.read_sql_query(
-        f"SELECT id, {fields} FROM master_{spec['table']} ORDER BY id",
-        conn,
-    )
-    conn.close()
-    return df
+def _crud_values(spec, prefix, row=None):
+    values = {}
+    for field, label, kind in spec:
+        old = row.get(field) if row else None
+        if kind == "int":
+            values[field] = st.number_input(
+                label, min_value=0, step=1,
+                value=int(old) if old is not None and pd.notna(old) else 0,
+                key=f"{prefix}_{field}",
+            )
+        elif kind == "float":
+            values[field] = st.number_input(
+                label, min_value=0.0, step=0.05, format="%.2f",
+                value=float(old) if old is not None and pd.notna(old) else 0.0,
+                key=f"{prefix}_{field}",
+            )
+        else:
+            values[field] = st.text_input(
+                label, value="" if old is None or pd.isna(old) else str(old),
+                key=f"{prefix}_{field}",
+            )
+    return values
 
 
-def _setup_duplicate_exists(name, values, exclude_id=None):
-    spec = SETUP_SPECS[name]
+def _crud_duplicate(table, fields, values, exclude_id=None):
     conn = sqlite3.connect(DB_FILE)
-    where = []
-    params = []
-    for field, _, _ in spec["columns"]:
-        where.append(f"{field} = ?")
-        params.append(values[field])
-    sql = f"SELECT id FROM master_{spec['table']} WHERE " + " AND ".join(where)
+    where = " AND ".join(f"{f}=?" for f, _, _ in fields)
+    params = [values[f] for f, _, _ in fields]
+    sql = f"SELECT id FROM master_{table} WHERE {where}"
     if exclude_id is not None:
-        sql += " AND id <> ?"
+        sql += " AND id<>?"
         params.append(exclude_id)
     found = conn.execute(sql, params).fetchone()
     conn.close()
     return found is not None
 
 
-def _setup_add(name, values):
-    spec = SETUP_SPECS[name]
-    if _setup_duplicate_exists(name, values):
+def _crud_add(table, fields, values):
+    if _crud_duplicate(table, fields, values):
         return False, "Data yang sama sudah ada."
-
-    fields = [c[0] for c in spec["columns"]]
-    placeholders = ",".join(["?"] * len(fields))
+    names = [f for f, _, _ in fields]
     conn = sqlite3.connect(DB_FILE)
     conn.execute(
-        f"INSERT INTO master_{spec['table']} ({','.join(fields)}) VALUES ({placeholders})",
-        [values[f] for f in fields],
+        f"INSERT INTO master_{table} ({','.join(names)}) VALUES ({','.join('?' for _ in names)})",
+        [values[n] for n in names],
     )
     conn.commit()
     conn.close()
     return True, "Data berhasil ditambahkan."
 
 
-def _setup_update(name, row_id, values):
-    spec = SETUP_SPECS[name]
-    if _setup_duplicate_exists(name, values, exclude_id=row_id):
+def _crud_update(table, fields, row_id, values):
+    if _crud_duplicate(table, fields, values, row_id):
         return False, "Data yang sama sudah ada."
-
-    fields = [c[0] for c in spec["columns"]]
-    set_clause = ", ".join(f"{f} = ?" for f in fields)
+    names = [f for f, _, _ in fields]
     conn = sqlite3.connect(DB_FILE)
     conn.execute(
-        f"UPDATE master_{spec['table']} SET {set_clause} WHERE id = ?",
-        [values[f] for f in fields] + [row_id],
+        f"UPDATE master_{table} SET {','.join(f'{n}=?' for n in names)} WHERE id=?",
+        [values[n] for n in names] + [row_id],
     )
     conn.commit()
     conn.close()
     return True, "Data berhasil diperbarui."
 
 
-def _setup_delete(name, row_id):
-    spec = SETUP_SPECS[name]
+def _crud_delete(table, row_id):
     conn = sqlite3.connect(DB_FILE)
-    conn.execute(
-        f"DELETE FROM master_{spec['table']} WHERE id = ?",
-        (row_id,),
-    )
+    conn.execute(f"DELETE FROM master_{table} WHERE id=?", (row_id,))
     conn.commit()
     conn.close()
     return True, "Data berhasil dihapus."
 
 
-def _setup_input_widget(field, label, kind, value=None, key_prefix=""):
-    key = f"{key_prefix}_{field}"
-    if kind == "int":
-        return st.number_input(label, min_value=0, step=1,
-                               value=int(value) if value is not None else 0,
-                               key=key)
-    if kind == "float":
-        return st.number_input(label, min_value=0.0, step=0.05,
-                               value=float(value) if value is not None else 0.0,
-                               format="%.2f", key=key)
-    return st.text_input(label, value="" if value is None else str(value), key=key)
-
-
-def _setup_values_from_form(spec, prefix, existing=None):
-    values = {}
-    for field, label, kind in spec["columns"]:
-        old = existing.get(field) if existing else None
-        values[field] = _setup_input_widget(
-            field, label, kind, old, key_prefix=prefix
-        )
-    return values
-
-
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="app-subtitle">Manage master reference data used by Input Data and future dashboards.</div>',
+        '<div class="app-subtitle">Master reference data used by Input Data and dashboards.</div>',
         unsafe_allow_html=True,
     )
 
-    tab_names = list(SETUP_SPECS.keys())
-    tabs = st.tabs(tab_names)
+    names = list(SETUP_CRUD.keys())
+    tabs = st.tabs(names)
 
-    for tab, name in zip(tabs, tab_names):
+    for tab, label in zip(tabs, names):
         with tab:
-            spec = SETUP_SPECS[name]
-            df = _setup_read(name)
-            display_df = df.drop(columns=["id"]).copy()
+            table, fields = SETUP_CRUD[label]
+            df = get_master_table(table)
 
-            st.markdown(f"### {name}")
+            st.markdown(f"### {label}")
 
-            if display_df.empty:
-                st.info("Belum ada data pada master ini.")
-            else:
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            visible = df.drop(columns=["id"], errors="ignore")
+            st.dataframe(visible, use_container_width=True, hide_index=True)
 
-            # CRUD controls stay compact and do not create a long vertical page.
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                add_open = st.checkbox("＋ Add", key=f"add_open_{spec['table']}")
-            with c2:
-                edit_open = st.checkbox("✎ Edit", key=f"edit_open_{spec['table']}",
-                                         disabled=df.empty)
-            with c3:
-                delete_open = st.checkbox("🗑 Delete", key=f"delete_open_{spec['table']}",
-                                          disabled=df.empty)
+            add_col, edit_col, delete_col = st.columns(3)
 
-            if add_open:
-                st.markdown("#### Add New")
-                with st.form(f"add_{spec['table']}", clear_on_submit=True):
-                    values = _setup_values_from_form(spec, f"add_{spec['table']}")
-                    submitted = st.form_submit_button("Save New", type="primary")
-                    if submitted:
-                        invalid = any(
-                            kind == "text" and not str(values[field]).strip()
-                            for field, _, kind in spec["columns"]
-                        )
-                        if invalid:
-                            st.error("Field wajib diisi.")
-                        else:
-                            ok, msg = _setup_add(name, values)
+            with add_col:
+                with st.expander("＋ Add", expanded=False):
+                    with st.form(f"add_{table}", clear_on_submit=True):
+                        vals = _crud_values(fields, f"add_{table}")
+                        if st.form_submit_button("Save New", type="primary", use_container_width=True):
+                            if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
+                                st.error("Field wajib diisi.")
+                            else:
+                                ok,msg=_crud_add(table,fields,vals)
+                                (st.success if ok else st.error)(msg)
+                                if ok: st.rerun()
+
+            if not df.empty:
+                labels={int(r.id):" • ".join(str(r[f]) for f,_,_ in fields) for _,r in df.iterrows()}
+
+                with edit_col:
+                    with st.expander("✎ Edit", expanded=False):
+                        rid=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"edit_sel_{table}")
+                        row=df[df.id==rid].iloc[0].to_dict()
+                        with st.form(f"edit_{table}"):
+                            vals=_crud_values(fields,f"edit_{table}",row)
+                            if st.form_submit_button("Save Changes",type="primary",use_container_width=True):
+                                if any(k=="text" and not str(vals[f]).strip() for f,_,k in fields):
+                                    st.error("Field wajib diisi.")
+                                else:
+                                    ok,msg=_crud_update(table,fields,int(rid),vals)
+                                    (st.success if ok else st.error)(msg)
+                                    if ok: st.rerun()
+
+                with delete_col:
+                    with st.expander("🗑 Delete", expanded=False):
+                        rid2=st.selectbox("Select data", list(labels), format_func=lambda x: labels[x], key=f"del_sel_{table}")
+                        confirm=st.checkbox("Confirm deletion",key=f"del_confirm_{table}")
+                        if st.button("Delete Permanently",key=f"del_btn_{table}",disabled=not confirm,use_container_width=True):
+                            ok,msg=_crud_delete(table,int(rid2))
                             (st.success if ok else st.error)(msg)
-                            if ok:
-                                st.rerun()
+                            if ok: st.rerun()
 
-            if edit_open and not df.empty:
-                st.markdown("#### Edit")
-                options = df["id"].tolist()
-                labels = {
-                    int(row["id"]): " • ".join(
-                        str(row[c[0]]) for c in spec["columns"]
-                    )
-                    for _, row in df.iterrows()
-                }
-                selected_id = st.selectbox(
-                    "Select data",
-                    options,
-                    format_func=lambda x: labels[int(x)],
-                    key=f"edit_select_{spec['table']}",
-                )
-                selected_row = df[df["id"] == selected_id].iloc[0].to_dict()
-                with st.form(f"edit_{spec['table']}"):
-                    values = _setup_values_from_form(
-                        spec, f"edit_{spec['table']}", selected_row
-                    )
-                    submitted = st.form_submit_button("Save Changes", type="primary")
-                    if submitted:
-                        invalid = any(
-                            kind == "text" and not str(values[field]).strip()
-                            for field, _, kind in spec["columns"]
-                        )
-                        if invalid:
-                            st.error("Field wajib diisi.")
-                        else:
-                            ok, msg = _setup_update(name, int(selected_id), values)
-                            (st.success if ok else st.error)(msg)
-                            if ok:
-                                st.rerun()
 
-            if delete_open and not df.empty:
-                st.markdown("#### Delete")
-                options = df["id"].tolist()
-                labels = {
-                    int(row["id"]): " • ".join(
-                        str(row[c[0]]) for c in spec["columns"]
-                    )
-                    for _, row in df.iterrows()
-                }
-                delete_id = st.selectbox(
-                    "Select data to delete",
-                    options,
-                    format_func=lambda x: labels[int(x)],
-                    key=f"delete_select_{spec['table']}",
-                )
-                confirm = st.checkbox(
-                    "Confirm permanent deletion",
-                    key=f"delete_confirm_{spec['table']}",
-                )
-                if st.button(
-                    "Delete Permanently",
-                    key=f"delete_btn_{spec['table']}",
-                    type="secondary",
-                    disabled=not confirm,
-                ):
-                    ok, msg = _setup_delete(name, int(delete_id))
-                    (st.success if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
+# Future Input Data modules should read these master tables directly.
+def master_options(table, field):
+    conn = sqlite3.connect(DB_FILE)
+    rows = conn.execute(
+        f"SELECT {field} FROM master_{table} ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
 
+
+def input_data_page(submodule):
+    st.markdown('<div class="app-title">Input Data</div>', unsafe_allow_html=True)
+    st.info(f"{submodule} is the next module to be connected to the master database.")
 
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION — V3A STATIC TREE
