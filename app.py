@@ -896,6 +896,9 @@ def get_staff():
 
 def get_refs(category):
     conn = get_conn()
+    if not table_exists(conn, "reference_values"):
+        conn.close()
+        return []
     rows = conn.execute(
         "SELECT value FROM reference_values WHERE category=? ORDER BY rowid",
         (category,),
@@ -2187,6 +2190,7 @@ if st.sidebar.button(
     st.session_state.v3b_setup_submodule = "Setup Manager"
     st.rerun()
 
+init_db()
 init_master_database()
 
 module = st.session_state.v3a_module
