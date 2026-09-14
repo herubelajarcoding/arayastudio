@@ -446,7 +446,27 @@ st.markdown(
     @media (max-width: 560px) {
         .kpi-row {grid-template-columns:1fr;}
     }
-    .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
+    /* Setup Manager tabs: keep all masters accessible without clipping. */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: .35rem;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: thin;
+        padding-bottom: .18rem;
+    }
+    .stTabs [data-baseweb="tab-list"] > div {
+        flex-wrap: nowrap !important;
+        min-width: max-content !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        min-width: max-content !important;
+        padding-left: .7rem !important;
+        padding-right: .7rem !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] { min-width: 100% !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1715,7 +1735,7 @@ def weekly_dashboard():
 # SETUP.xlsx is used only as initial seed.
 # After database creation, application reads SQLite database.
 
-DB_FILE = "araya.db"
+DB_FILE = str(DB_PATH)
 SETUP_FILE = "SETUP.xlsx"
 
 
@@ -1981,8 +2001,6 @@ def setup_page():
         with tab:
             spec = SETUP_SPECS[name]
             df = _setup_read(name)
-
-            # Clean presentation: database ID stays internal and is never shown.
             display_df = df.drop(columns=["id"]).copy()
 
             st.markdown(f"### {name}")
@@ -1990,23 +2008,25 @@ def setup_page():
             if display_df.empty:
                 st.info("Belum ada data pada master ini.")
             else:
-                st.dataframe(
-                    display_df,
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-            # ADD
-            with st.expander(f"＋ Add {name}", expanded=False):
+            # CRUD controls stay compact and do not create a long vertical page.
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                add_open = st.checkbox("＋ Add", key=f"add_open_{spec['table']}")
+            with c2:
+                edit_open = st.checkbox("✎ Edit", key=f"edit_open_{spec['table']}",
+                                         disabled=df.empty)
+            with c3:
+                delete_open = st.checkbox("🗑 Delete", key=f"delete_open_{spec['table']}",
+                                          disabled=df.empty)
+
+            if add_open:
+                st.markdown("#### Add New")
                 with st.form(f"add_{spec['table']}", clear_on_submit=True):
                     values = _setup_values_from_form(spec, f"add_{spec['table']}")
-                    submitted = st.form_submit_button(
-                        "Save New",
-                        type="primary",
-                        use_container_width=True,
-                    )
+                    submitted = st.form_submit_button("Save New", type="primary")
                     if submitted:
-                        # Basic validation for text fields.
                         invalid = any(
                             kind == "text" and not str(values[field]).strip()
                             for field, _, kind in spec["columns"]
@@ -2019,75 +2039,69 @@ def setup_page():
                             if ok:
                                 st.rerun()
 
-            # EDIT / DELETE
-            if not df.empty:
+            if edit_open and not df.empty:
+                st.markdown("#### Edit")
                 options = df["id"].tolist()
-
-                with st.expander(f"✎ Edit {name}", expanded=False):
-                    labels = {
-                        int(row["id"]): " • ".join(
-                            str(row[c[0]]) for c in spec["columns"]
-                        )
-                        for _, row in df.iterrows()
-                    }
-                    selected_id = st.selectbox(
-                        "Select data",
-                        options,
-                        format_func=lambda x: labels[int(x)],
-                        key=f"edit_select_{spec['table']}",
+                labels = {
+                    int(row["id"]): " • ".join(
+                        str(row[c[0]]) for c in spec["columns"]
                     )
-                    selected_row = df[df["id"] == selected_id].iloc[0].to_dict()
-
-                    with st.form(f"edit_{spec['table']}"):
-                        values = _setup_values_from_form(
-                            spec, f"edit_{spec['table']}", selected_row
-                        )
-                        submitted = st.form_submit_button(
-                            "Save Changes",
-                            type="primary",
-                            use_container_width=True,
-                        )
-                        if submitted:
-                            invalid = any(
-                                kind == "text" and not str(values[field]).strip()
-                                for field, _, kind in spec["columns"]
-                            )
-                            if invalid:
-                                st.error("Field wajib diisi.")
-                            else:
-                                ok, msg = _setup_update(name, int(selected_id), values)
-                                (st.success if ok else st.error)(msg)
-                                if ok:
-                                    st.rerun()
-
-                with st.expander(f"🗑 Delete {name}", expanded=False):
-                    labels = {
-                        int(row["id"]): " • ".join(
-                            str(row[c[0]]) for c in spec["columns"]
-                        )
-                        for _, row in df.iterrows()
-                    }
-                    delete_id = st.selectbox(
-                        "Select data to delete",
-                        options,
-                        format_func=lambda x: labels[int(x)],
-                        key=f"delete_select_{spec['table']}",
+                    for _, row in df.iterrows()
+                }
+                selected_id = st.selectbox(
+                    "Select data",
+                    options,
+                    format_func=lambda x: labels[int(x)],
+                    key=f"edit_select_{spec['table']}",
+                )
+                selected_row = df[df["id"] == selected_id].iloc[0].to_dict()
+                with st.form(f"edit_{spec['table']}"):
+                    values = _setup_values_from_form(
+                        spec, f"edit_{spec['table']}", selected_row
                     )
-                    confirm = st.checkbox(
-                        "I understand this master record will be permanently deleted.",
-                        key=f"delete_confirm_{spec['table']}",
+                    submitted = st.form_submit_button("Save Changes", type="primary")
+                    if submitted:
+                        invalid = any(
+                            kind == "text" and not str(values[field]).strip()
+                            for field, _, kind in spec["columns"]
+                        )
+                        if invalid:
+                            st.error("Field wajib diisi.")
+                        else:
+                            ok, msg = _setup_update(name, int(selected_id), values)
+                            (st.success if ok else st.error)(msg)
+                            if ok:
+                                st.rerun()
+
+            if delete_open and not df.empty:
+                st.markdown("#### Delete")
+                options = df["id"].tolist()
+                labels = {
+                    int(row["id"]): " • ".join(
+                        str(row[c[0]]) for c in spec["columns"]
                     )
-                    if st.button(
-                        "Delete Permanently",
-                        key=f"delete_btn_{spec['table']}",
-                        type="secondary",
-                        disabled=not confirm,
-                        use_container_width=True,
-                    ):
-                        ok, msg = _setup_delete(name, int(delete_id))
-                        (st.success if ok else st.error)(msg)
-                        if ok:
-                            st.rerun()
+                    for _, row in df.iterrows()
+                }
+                delete_id = st.selectbox(
+                    "Select data to delete",
+                    options,
+                    format_func=lambda x: labels[int(x)],
+                    key=f"delete_select_{spec['table']}",
+                )
+                confirm = st.checkbox(
+                    "Confirm permanent deletion",
+                    key=f"delete_confirm_{spec['table']}",
+                )
+                if st.button(
+                    "Delete Permanently",
+                    key=f"delete_btn_{spec['table']}",
+                    type="secondary",
+                    disabled=not confirm,
+                ):
+                    ok, msg = _setup_delete(name, int(delete_id))
+                    (st.success if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
 
 
 # ------------------------------------------------------------
