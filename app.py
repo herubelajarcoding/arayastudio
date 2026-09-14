@@ -447,6 +447,51 @@ st.markdown(
         .kpi-row {grid-template-columns:1fr;}
     }
     /* Setup tabs: horizontal scrolling prevents master names from being clipped. */
+
+    /* V3 UI FIX — responsive master/input navigation */
+    .stTabs [data-baseweb="tab-list"] {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: thin !important;
+        gap: .25rem !important;
+        max-width: 100% !important;
+    }
+    .stTabs [data-baseweb="tab-list"] > div {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        min-width: max-content !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        min-width: max-content !important;
+        padding-left: .65rem !important;
+        padding-right: .65rem !important;
+    }
+
+    /* Keep wide forms/tables inside the viewport instead of clipping. */
+    [data-testid="stHorizontalBlock"] {
+        max-width: 100% !important;
+    }
+    .stDataFrame, [data-testid="stDataFrame"] {
+        max-width: 100% !important;
+    }
+
+    /* Horizontal scrolling for any deliberately wide navigation row. */
+    .arayastd-scroll-x {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    /* Prevent long labels from forcing cards/forms wider than viewport. */
+    .stButton button, .stSelectbox, .stTextInput, .stNumberInput,
+    .stMultiSelect, .stDateInput {
+        max-width: 100% !important;
+    }
+
     .stTabs [data-baseweb="tab-list"] { overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important; gap: .3rem !important; }
     .stTabs [data-baseweb="tab-list"] > div { flex-wrap: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab"] { flex: 0 0 auto !important; white-space: nowrap !important; min-width: max-content !important; }
