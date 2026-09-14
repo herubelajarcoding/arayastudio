@@ -123,7 +123,7 @@ st.markdown(
         box-sizing:border-box !important;
     }
     .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
-    .app-title {font-size: 2rem; font-weight: 750; margin-bottom: 0.1rem;}
+    .app-title {font-size: 2rem; line-height: 1.25; font-weight: 750; margin: 0 0 0.1rem 0; padding-top: 0.35rem; overflow: visible;}
     /* ========================================================
        V3A STATIC SIDEBAR TREE
        ======================================================== */
@@ -496,7 +496,12 @@ st.markdown(
     .stTabs [data-baseweb="tab-list"] > div { flex-wrap: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab"] { flex: 0 0 auto !important; white-space: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
-    </style>
+    
+    /* Title-only clipping fix */
+    section.main .block-container {
+        padding-top: 2.5rem !important;
+    }
+</style>
     """,
     unsafe_allow_html=True,
 )
