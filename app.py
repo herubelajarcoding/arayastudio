@@ -1802,32 +1802,292 @@ def get_master_table(name):
     conn.close()
     return df
 
+
+# ============================================================
+# SETUP MASTER MANAGER — CRUD
+# ============================================================
+
+SETUP_SPECS = {
+    "Role": {
+        "table": "role",
+        "columns": [("role", "Role", "text")],
+    },
+    "Project Type": {
+        "table": "project_type",
+        "columns": [("project_type", "Project Type", "text")],
+    },
+    "Phase": {
+        "table": "phase",
+        "columns": [
+            ("phase", "Phase", "text"),
+            ("sequence", "Sequence", "int"),
+            ("base_load", "Base Load", "float"),
+        ],
+    },
+    "Project Status": {
+        "table": "project_status",
+        "columns": [("status", "Status", "text")],
+    },
+    "Meeting Type": {
+        "table": "meeting_type",
+        "columns": [("meeting_type", "Meeting Type", "text")],
+    },
+    "Meeting Location": {
+        "table": "meeting_location",
+        "columns": [("location", "Location", "text")],
+    },
+    "Activity Type": {
+        "table": "activity_type",
+        "columns": [("activity_type", "Activity Type", "text")],
+    },
+    "Priority": {
+        "table": "priority",
+        "columns": [("priority", "Priority", "text")],
+    },
+    "Project Size": {
+        "table": "project_size",
+        "columns": [
+            ("project_size", "Project Size", "text"),
+            ("multiplier", "Multiplier", "float"),
+        ],
+    },
+    "Workload Status": {
+        "table": "workload_status",
+        "columns": [
+            ("status", "Status", "text"),
+            ("max_load", "Max Load", "float"),
+        ],
+    },
+    "Mapping Status": {
+        "table": "mapping_status",
+        "columns": [("status", "Status", "text")],
+    },
+    "Task Status": {
+        "table": "task_status",
+        "columns": [("status", "Status", "text")],
+    },
+}
+
+
+def _setup_read(name):
+    spec = SETUP_SPECS[name]
+    conn = sqlite3.connect(DB_FILE)
+    fields = ", ".join(c[0] for c in spec["columns"])
+    df = pd.read_sql_query(
+        f"SELECT id, {fields} FROM master_{spec['table']} ORDER BY id",
+        conn,
+    )
+    conn.close()
+    return df
+
+
+def _setup_duplicate_exists(name, values, exclude_id=None):
+    spec = SETUP_SPECS[name]
+    conn = sqlite3.connect(DB_FILE)
+    where = []
+    params = []
+    for field, _, _ in spec["columns"]:
+        where.append(f"{field} = ?")
+        params.append(values[field])
+    sql = f"SELECT id FROM master_{spec['table']} WHERE " + " AND ".join(where)
+    if exclude_id is not None:
+        sql += " AND id <> ?"
+        params.append(exclude_id)
+    found = conn.execute(sql, params).fetchone()
+    conn.close()
+    return found is not None
+
+
+def _setup_add(name, values):
+    spec = SETUP_SPECS[name]
+    if _setup_duplicate_exists(name, values):
+        return False, "Data yang sama sudah ada."
+
+    fields = [c[0] for c in spec["columns"]]
+    placeholders = ",".join(["?"] * len(fields))
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        f"INSERT INTO master_{spec['table']} ({','.join(fields)}) VALUES ({placeholders})",
+        [values[f] for f in fields],
+    )
+    conn.commit()
+    conn.close()
+    return True, "Data berhasil ditambahkan."
+
+
+def _setup_update(name, row_id, values):
+    spec = SETUP_SPECS[name]
+    if _setup_duplicate_exists(name, values, exclude_id=row_id):
+        return False, "Data yang sama sudah ada."
+
+    fields = [c[0] for c in spec["columns"]]
+    set_clause = ", ".join(f"{f} = ?" for f in fields)
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        f"UPDATE master_{spec['table']} SET {set_clause} WHERE id = ?",
+        [values[f] for f in fields] + [row_id],
+    )
+    conn.commit()
+    conn.close()
+    return True, "Data berhasil diperbarui."
+
+
+def _setup_delete(name, row_id):
+    spec = SETUP_SPECS[name]
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        f"DELETE FROM master_{spec['table']} WHERE id = ?",
+        (row_id,),
+    )
+    conn.commit()
+    conn.close()
+    return True, "Data berhasil dihapus."
+
+
+def _setup_input_widget(field, label, kind, value=None, key_prefix=""):
+    key = f"{key_prefix}_{field}"
+    if kind == "int":
+        return st.number_input(label, min_value=0, step=1,
+                               value=int(value) if value is not None else 0,
+                               key=key)
+    if kind == "float":
+        return st.number_input(label, min_value=0.0, step=0.05,
+                               value=float(value) if value is not None else 0.0,
+                               format="%.2f", key=key)
+    return st.text_input(label, value="" if value is None else str(value), key=key)
+
+
+def _setup_values_from_form(spec, prefix, existing=None):
+    values = {}
+    for field, label, kind in spec["columns"]:
+        old = existing.get(field) if existing else None
+        values[field] = _setup_input_widget(
+            field, label, kind, old, key_prefix=prefix
+        )
+    return values
+
+
 def setup_page():
     st.markdown('<div class="app-title">Setup Manager</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="app-subtitle">Master reference database.</div>',
+        '<div class="app-subtitle">Manage master reference data used by Input Data and future dashboards.</div>',
         unsafe_allow_html=True,
     )
 
-    tabs = st.tabs([
-        "Role","Project Type","Phase","Project Status",
-        "Meeting Type","Meeting Location","Activity Type",
-        "Priority","Project Size","Workload Status",
-        "Mapping Status","Task Status"
-    ])
+    tab_names = list(SETUP_SPECS.keys())
+    tabs = st.tabs(tab_names)
 
-    mapping = [
-        "role","project_type","phase","project_status",
-        "meeting_type","meeting_location","activity_type",
-        "priority","project_size","workload_status",
-        "mapping_status","task_status"
-    ]
-
-    for tab,name in zip(tabs,mapping):
+    for tab, name in zip(tabs, tab_names):
         with tab:
-            st.dataframe(get_master_table(name),
-                         use_container_width=True,
-                         hide_index=True)
+            spec = SETUP_SPECS[name]
+            df = _setup_read(name)
+
+            # Clean presentation: database ID stays internal and is never shown.
+            display_df = df.drop(columns=["id"]).copy()
+
+            st.markdown(f"### {name}")
+
+            if display_df.empty:
+                st.info("Belum ada data pada master ini.")
+            else:
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            # ADD
+            with st.expander(f"＋ Add {name}", expanded=False):
+                with st.form(f"add_{spec['table']}", clear_on_submit=True):
+                    values = _setup_values_from_form(spec, f"add_{spec['table']}")
+                    submitted = st.form_submit_button(
+                        "Save New",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                    if submitted:
+                        # Basic validation for text fields.
+                        invalid = any(
+                            kind == "text" and not str(values[field]).strip()
+                            for field, _, kind in spec["columns"]
+                        )
+                        if invalid:
+                            st.error("Field wajib diisi.")
+                        else:
+                            ok, msg = _setup_add(name, values)
+                            (st.success if ok else st.error)(msg)
+                            if ok:
+                                st.rerun()
+
+            # EDIT / DELETE
+            if not df.empty:
+                options = df["id"].tolist()
+
+                with st.expander(f"✎ Edit {name}", expanded=False):
+                    labels = {
+                        int(row["id"]): " • ".join(
+                            str(row[c[0]]) for c in spec["columns"]
+                        )
+                        for _, row in df.iterrows()
+                    }
+                    selected_id = st.selectbox(
+                        "Select data",
+                        options,
+                        format_func=lambda x: labels[int(x)],
+                        key=f"edit_select_{spec['table']}",
+                    )
+                    selected_row = df[df["id"] == selected_id].iloc[0].to_dict()
+
+                    with st.form(f"edit_{spec['table']}"):
+                        values = _setup_values_from_form(
+                            spec, f"edit_{spec['table']}", selected_row
+                        )
+                        submitted = st.form_submit_button(
+                            "Save Changes",
+                            type="primary",
+                            use_container_width=True,
+                        )
+                        if submitted:
+                            invalid = any(
+                                kind == "text" and not str(values[field]).strip()
+                                for field, _, kind in spec["columns"]
+                            )
+                            if invalid:
+                                st.error("Field wajib diisi.")
+                            else:
+                                ok, msg = _setup_update(name, int(selected_id), values)
+                                (st.success if ok else st.error)(msg)
+                                if ok:
+                                    st.rerun()
+
+                with st.expander(f"🗑 Delete {name}", expanded=False):
+                    labels = {
+                        int(row["id"]): " • ".join(
+                            str(row[c[0]]) for c in spec["columns"]
+                        )
+                        for _, row in df.iterrows()
+                    }
+                    delete_id = st.selectbox(
+                        "Select data to delete",
+                        options,
+                        format_func=lambda x: labels[int(x)],
+                        key=f"delete_select_{spec['table']}",
+                    )
+                    confirm = st.checkbox(
+                        "I understand this master record will be permanently deleted.",
+                        key=f"delete_confirm_{spec['table']}",
+                    )
+                    if st.button(
+                        "Delete Permanently",
+                        key=f"delete_btn_{spec['table']}",
+                        type="secondary",
+                        disabled=not confirm,
+                        use_container_width=True,
+                    ):
+                        ok, msg = _setup_delete(name, int(delete_id))
+                        (st.success if ok else st.error)(msg)
+                        if ok:
+                            st.rerun()
 
 
 # ------------------------------------------------------------
