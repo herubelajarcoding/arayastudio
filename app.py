@@ -2406,8 +2406,8 @@ def _import_team_excel():
     # Streamlit reruns the script, but the uploaded file remains in session;
     # without this guard it would be validated a second time and appear as
     # duplicate data.
-    if st.session_state.pop("v4c_team_import_success", None) is not None:
-        imported_count = st.session_state.pop("v4c_team_import_success")
+    imported_count = st.session_state.pop("v4c_team_import_success", None)
+    if imported_count is not None:
         imported_file = st.session_state.pop("v4c_team_import_file", "")
         st.success(
             f"Import berhasil. {imported_count} Team Member "
