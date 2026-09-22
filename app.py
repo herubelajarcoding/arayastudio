@@ -3394,26 +3394,53 @@ def input_activities_page():
 
 
 def ensure_freelance_mapping_schema():
-    """Migrate legacy date-based mapping to status-based mapping without
-    deleting existing records."""
+    """Ensure Freelance Project Mapping is independent from Project Lead.
+    A project may have many freelancers; each freelancer may hold many projects.
+    The only duplicate that is blocked is the same freelancer + same project."""
     conn=get_conn()
     try:
         cols=[r[1] for r in conn.execute(
             "PRAGMA table_info(freelance_project_mapping)"
         ).fetchall()]
-        if "mapping_status" not in cols:
+
+        if not cols:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS freelance_project_mapping (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    freelancer TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    mapping_status TEXT,
+                    notes TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        elif "mapping_status" not in cols:
             conn.execute(
                 "ALTER TABLE freelance_project_mapping ADD COLUMN mapping_status TEXT"
             )
-            master=master_values("mapping_status","status")
-            default_status=master[0] if master else None
-            if default_status:
-                conn.execute(
-                    "UPDATE freelance_project_mapping SET mapping_status=? "
-                    "WHERE mapping_status IS NULL",
-                    (default_status,)
-                )
-            conn.commit()
+
+        # Migrate/normalize the duplicate rule: Lead in projects is NOT
+        # considered a mapping. Multiple freelancers may map to one project.
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_freelance_project_pair
+            ON freelance_project_mapping(freelancer, project_id)
+        """)
+
+        master=master_values("mapping_status","status")
+        default_status=master[0] if master else None
+        if default_status:
+            conn.execute(
+                "UPDATE freelance_project_mapping SET mapping_status=? "
+                "WHERE mapping_status IS NULL OR TRIM(mapping_status)=''",
+                (default_status,)
+            )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Existing duplicate rows are retained; the application-level check
+        # below prevents adding another identical pair.
+        conn.rollback()
     finally:
         conn.close()
 
@@ -3486,15 +3513,27 @@ def input_freelance_mapping_page():
                 else:
                     conn=get_conn()
                     try:
-                        conn.execute("""INSERT INTO freelance_project_mapping
-                            (freelancer,project_id,mapping_status)
-                            VALUES (?,?,?)""",
-                            (freelancer,project_id,mapping_status))
-                        conn.commit()
-                        st.success("Freelance project mapping berhasil ditambahkan.")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Freelance dan Project tersebut sudah memiliki mapping.")
+                        # IMPORTANT: Lead assignment in projects is completely
+                        # independent. Only an existing Freelance+Project pair
+                        # blocks a new mapping.
+                        exists=conn.execute(
+                            """SELECT 1 FROM freelance_project_mapping
+                               WHERE freelancer=? AND project_id=? LIMIT 1""",
+                            (freelancer,project_id)
+                        ).fetchone()
+                        if exists:
+                            st.error("Freelance tersebut sudah memiliki mapping ke Project ini.")
+                        else:
+                            conn.execute("""INSERT INTO freelance_project_mapping
+                                (freelancer,project_id,mapping_status)
+                                VALUES (?,?,?)""",
+                                (freelancer,project_id,mapping_status))
+                            conn.commit()
+                            st.success("Freelance project mapping berhasil ditambahkan.")
+                            st.rerun()
+                    except sqlite3.IntegrityError as exc:
+                        conn.rollback()
+                        st.error(f"Mapping gagal disimpan: {exc}")
                     finally:
                         conn.close()
         elif not statuses:
@@ -3547,8 +3586,9 @@ def input_freelance_mapping_page():
                             conn.commit()
                             st.success("Mapping berhasil diperbarui.")
                             st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("Freelance dan Project tersebut sudah memiliki mapping.")
+                        except sqlite3.IntegrityError as exc:
+                            conn.rollback()
+                            st.error(f"Mapping gagal diperbarui: {exc}")
                         finally:
                             conn.close()
 
