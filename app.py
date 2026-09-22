@@ -2106,89 +2106,55 @@ def _team_categories():
     return ["Permanent", "Intern", "Freelance"]
 
 
-def _team_card_start():
-    st.markdown(
-        """
-        <div style="
-            border:1px solid #d9dde5;
-            border-radius:12px;
-            padding:22px 24px 10px 24px;
-            margin-top:10px;
-            margin-bottom:20px;
-            background:#ffffff;
-        ">
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _team_card_end():
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
 def _add_team():
     st.markdown("### Add Team Member")
 
-    # Category tetap reactive agar pilihan Intern langsung mengaktifkan tanggal,
-    # tetapi secara visual berada dalam card yang sama dengan seluruh form.
-    _team_card_start()
+    # Category is intentionally OUTSIDE the form so Streamlit reruns immediately
+    # when the user changes Permanent / Intern / Freelance.
+    cats=_team_categories()
+    category=st.selectbox("Category *",cats,key="v4_add_team_category")
 
-    cats = _team_categories()
-    category = st.selectbox(
-        "Category *",
-        cats,
-        key="v4_add_team_category",
-    )
+    with st.form("v4_add_team", clear_on_submit=True):
+        c1,c2=st.columns(2)
+        with c1:
+            name=st.text_input("Staff Name *")
+            roles=master_values("role","role")
+            role=_select_or_empty("Primary Role *",roles)
+        with c2:
+            active=st.checkbox("Active",value=True)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        name = st.text_input("Staff Name *")
-        roles = master_values("role", "role")
-        role = _select_or_empty("Primary Role *", roles)
-    with c2:
-        active = st.checkbox("Active", value=True, key="v4_add_team_active")
+        st.markdown("#### Intern Period")
+        d1,d2=st.columns(2)
+        with d1:
+            intern_start=st.date_input(
+                "Intern Start *",
+                value=None,
+                disabled=(category!="Intern"),
+                key="v4_add_intern_start",
+            )
+        with d2:
+            intern_end=st.date_input(
+                "Intern End *",
+                value=None,
+                disabled=(category!="Intern"),
+                key="v4_add_intern_end",
+            )
 
-    st.markdown("#### Intern Period")
-    d1, d2 = st.columns(2)
-    with d1:
-        intern_start = st.date_input(
-            "Intern Start *",
-            value=None,
-            disabled=(category != "Intern"),
-            key="v4_add_intern_start",
+        if category!="Intern":
+            st.caption("Intern dates are disabled for Permanent and Freelance.")
+
+        save=st.form_submit_button(
+            "Save Team Member",type="primary",use_container_width=True
         )
-    with d2:
-        intern_end = st.date_input(
-            "Intern End *",
-            value=None,
-            disabled=(category != "Intern"),
-            key="v4_add_intern_end",
-        )
-
-    if category != "Intern":
-        st.caption("Intern dates are disabled for Permanent and Freelance.")
-
-    save = st.button(
-        "Save Team Member",
-        type="primary",
-        use_container_width=True,
-        key="v4_add_team_save",
-    )
-
-    _team_card_end()
 
     if save:
-        errors = []
-        if not name.strip():
-            errors.append("Staff Name")
-        if not role:
-            errors.append("Primary Role")
+        errors=[]
+        if not name.strip(): errors.append("Staff Name")
+        if not role: errors.append("Primary Role")
 
-        if category == "Intern":
-            if intern_start is None:
-                errors.append("Intern Start")
-            if intern_end is None:
-                errors.append("Intern End")
+        if category=="Intern":
+            if intern_start is None: errors.append("Intern Start")
+            if intern_end is None: errors.append("Intern End")
             if intern_start and intern_end and intern_end < intern_start:
                 st.error("Intern End tidak boleh lebih awal dari Intern Start.")
                 return
@@ -2197,25 +2163,19 @@ def _add_team():
             st.error("Field wajib diisi: " + ", ".join(errors) + ".")
             return
 
-        if category != "Intern":
-            intern_start = None
-            intern_end = None
+        if category!="Intern":
+            intern_start=None
+            intern_end=None
 
-        conn = get_conn()
+        conn=get_conn()
         try:
-            conn.execute(
-                """INSERT INTO staff
+            conn.execute("""INSERT INTO staff
                 (name,category,primary_role,intern_start,intern_end,active)
                 VALUES (?,?,?,?,?,?)""",
-                (
-                    name.strip(),
-                    category,
-                    role,
-                    intern_start.isoformat() if intern_start else None,
-                    intern_end.isoformat() if intern_end else None,
-                    1 if active else 0,
-                ),
-            )
+                (name.strip(),category,role,
+                 intern_start.isoformat() if intern_start else None,
+                 intern_end.isoformat() if intern_end else None,
+                 1 if active else 0))
             conn.commit()
             st.success("Team member berhasil ditambahkan.")
             st.rerun()
@@ -2224,98 +2184,79 @@ def _add_team():
         finally:
             conn.close()
 
-
 def _edit_team(df):
     if df.empty:
         st.info("Belum ada team member.")
         return
 
     st.markdown("### Edit Team Member")
-    ids = df["id"].tolist()
-    labels = {
-        int(r.id): f"{r['name']} • {r['category']} • {r['primary_role']}"
-        for _, r in df.iterrows()
+    ids=df["id"].tolist()
+    labels={
+        int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}"
+        for _,r in df.iterrows()
     }
-    rid = st.selectbox(
-        "Select Team Member",
-        ids,
-        format_func=lambda x: labels[int(x)],
-        key="v4_team_edit_id",
+    rid=st.selectbox(
+        "Select Team Member",ids,
+        format_func=lambda x:labels[int(x)],
+        key="v4_team_edit_id"
     )
-    row = df[df.id == rid].iloc[0]
+    row=df[df.id==rid].iloc[0]
 
-    _team_card_start()
-
-    cats = _team_categories()
-    category = st.selectbox(
-        "Category *",
-        cats,
+    # Category is outside the form so the Intern date fields react immediately.
+    cats=_team_categories()
+    category=st.selectbox(
+        "Category *",cats,
         index=cats.index(row["category"]) if row["category"] in cats else 0,
-        key=f"v4_edit_team_category_{rid}",
+        key=f"v4_edit_team_category_{rid}"
     )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        name = st.text_input("Staff Name *", value=clean(row["name"]))
-        roles = master_values("role", "role")
-        role = _select_or_empty(
-            "Primary Role *",
-            roles,
-            index=roles.index(row["primary_role"])
-            if row["primary_role"] in roles else 0,
-        )
-    with c2:
-        active = st.checkbox("Active", value=bool(row["active"]), key=f"v4_edit_team_active_{rid}")
+    with st.form("v4_edit_team"):
+        c1,c2=st.columns(2)
+        with c1:
+            name=st.text_input("Staff Name *",value=clean(row["name"]))
+            roles=master_values("role","role")
+            role=_select_or_empty(
+                "Primary Role *",roles,
+                index=roles.index(row["primary_role"])
+                if row["primary_role"] in roles else 0
+            )
+        with c2:
+            active=st.checkbox("Active",value=bool(row["active"]))
 
-    st.markdown("#### Intern Period")
-    d1, d2 = st.columns(2)
-    with d1:
-        sd = (
-            pd.to_datetime(row["intern_start"]).date()
-            if row["intern_start"] else None
-        )
-        intern_start = st.date_input(
-            "Intern Start *",
-            value=sd,
-            disabled=(category != "Intern"),
-            key=f"v4_edit_intern_start_{rid}",
-        )
-    with d2:
-        ed = (
-            pd.to_datetime(row["intern_end"]).date()
-            if row["intern_end"] else None
-        )
-        intern_end = st.date_input(
-            "Intern End *",
-            value=ed,
-            disabled=(category != "Intern"),
-            key=f"v4_edit_intern_end_{rid}",
-        )
+        st.markdown("#### Intern Period")
+        d1,d2=st.columns(2)
+        with d1:
+            sd=pd.to_datetime(row["intern_start"]).date() if row["intern_start"] else None
+            intern_start=st.date_input(
+                "Intern Start *",
+                value=sd,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_start_{rid}",
+            )
+        with d2:
+            ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
+            intern_end=st.date_input(
+                "Intern End *",
+                value=ed,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_end_{rid}",
+            )
 
-    if category != "Intern":
-        st.caption("Intern dates are disabled for Permanent and Freelance.")
+        if category!="Intern":
+            st.caption("Intern dates are disabled for Permanent and Freelance.")
 
-    save = st.button(
-        "Save Changes",
-        type="primary",
-        use_container_width=True,
-        key="v4_edit_team_save",
-    )
-
-    _team_card_end()
+        save=st.form_submit_button(
+            "Save Changes",type="primary",use_container_width=True
+        )
 
     if save:
-        errors = []
-        if not name.strip():
-            errors.append("Staff Name")
-        if not role:
-            errors.append("Primary Role")
+        errors=[]
+        if not name.strip(): errors.append("Staff Name")
+        if not role: errors.append("Primary Role")
 
-        if category == "Intern":
-            if intern_start is None:
-                errors.append("Intern Start")
-            if intern_end is None:
-                errors.append("Intern End")
+        if category=="Intern":
+            if intern_start is None: errors.append("Intern Start")
+            if intern_end is None: errors.append("Intern End")
             if intern_start and intern_end and intern_end < intern_start:
                 st.error("Intern End tidak boleh lebih awal dari Intern Start.")
                 return
@@ -2324,25 +2265,18 @@ def _edit_team(df):
             st.error("Field wajib diisi: " + ", ".join(errors) + ".")
             return
 
-        if category != "Intern":
-            intern_start = None
-            intern_end = None
+        if category!="Intern":
+            intern_start=None
+            intern_end=None
 
-        conn = get_conn()
+        conn=get_conn()
         try:
-            conn.execute(
-                """UPDATE staff SET name=?,category=?,primary_role=?,
+            conn.execute("""UPDATE staff SET name=?,category=?,primary_role=?,
                 intern_start=?,intern_end=?,active=? WHERE id=?""",
-                (
-                    name.strip(),
-                    category,
-                    role,
-                    intern_start.isoformat() if intern_start else None,
-                    intern_end.isoformat() if intern_end else None,
-                    1 if active else 0,
-                    int(rid),
-                ),
-            )
+                (name.strip(),category,role,
+                 intern_start.isoformat() if intern_start else None,
+                 intern_end.isoformat() if intern_end else None,
+                 1 if active else 0,int(rid)))
             conn.commit()
             st.success("Data berhasil diperbarui.")
             st.rerun()
