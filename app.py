@@ -2130,6 +2130,17 @@ def _staff_options():
     """)
 
 
+def _lead_options():
+    """Active Permanent/Intern team members eligible to be Project Lead.
+    Freelancers are assigned through Freelance Project Mapping instead."""
+    return db_df("""
+        SELECT id,name,category,primary_role,active
+        FROM staff
+        WHERE active=1 AND category <> 'Freelance'
+        ORDER BY name
+    """)
+
+
 def _project_name(pid):
     if not pid: return ""
     conn=get_conn()
@@ -2687,9 +2698,9 @@ def _add_project():
         with c3:
             statuses=_project_status_options()
             status=_select_or_empty("Project Status *",statuses)
-            staff=_staff_options()
+            staff=_lead_options()
             leads=staff["name"].tolist() if not staff.empty else []
-            lead=_select_or_empty("Lead",leads)
+            lead=_select_or_empty("Lead (Permanent / Intern)",leads)
             duration=_project_duration(start,finish)
             st.caption(f"Duration: {duration or '—'} month(s)")
         save=st.form_submit_button("Save Project",type="primary",use_container_width=True)
@@ -2747,7 +2758,7 @@ def _edit_project(df):
             statuses=_project_status_options()
             status=_select_or_empty("Project Status *",statuses,index=statuses.index(row["status"]) if row["status"] in statuses else 0)
             sdf=_staff_options(); leads=sdf["name"].tolist() if not sdf.empty else []
-            lead=_select_or_empty("Lead",leads,index=leads.index(row["lead"]) if row["lead"] in leads else 0)
+            lead=_select_or_empty("Lead (Permanent / Intern)",leads,index=leads.index(row["lead"]) if row["lead"] in leads else 0)
             st.caption(f"Duration: {_project_duration(start,finish) or '—'} month(s)")
         save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
     if save:
@@ -2905,7 +2916,7 @@ def _import_project_excel():
     project_types=master_values("project_type","project_type")
     statuses=_project_status_options()
     sizes=master_values("project_size","project_size")
-    leads_df=_staff_options()
+    leads_df=_lead_options()
     leads=leads_df["name"].tolist() if not leads_df.empty else []
 
     type_lookup={clean(x).lower():x for x in project_types}
