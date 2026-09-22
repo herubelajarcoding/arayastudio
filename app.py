@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 import calendar
 import html
 from io import BytesIO
+import re
 
 import pandas as pd
 import streamlit as st
@@ -2104,8 +2105,17 @@ def _select_or_empty(label, options, key=None, index=0, help=None):
     return st.selectbox(label, opts, index=min(index,len(opts)-1), key=key, help=help)
 
 
+def _project_status_options():
+    """Operational project statuses. Pipeline/Archived are not used for new project records."""
+    allowed=["Active","On Hold","Cancelled","Completed"]
+    master=master_values("project_status","status")
+    lookup={clean(x).lower():x for x in master}
+    return [lookup[x.lower()] for x in allowed if x.lower() in lookup]
+
+
 def _project_options():
-    df=db_df("SELECT id,name FROM projects ORDER BY id")
+    # Only Active projects can be selected for new project tagging/allocation.
+    df=db_df("SELECT id,name FROM projects WHERE status='Active' ORDER BY id")
     return df
 
 
@@ -2645,46 +2655,73 @@ def _project_duration(start,finish):
     return (finish.year-start.year)*12+finish.month-start.month+1
 
 
+
+def _next_project_id(conn, reserved=None):
+    """Generate the next system project ID (P001, P002, ...)."""
+    reserved = {str(x).upper() for x in (reserved or [])}
+    rows = conn.execute("SELECT id FROM projects").fetchall()
+    nums = []
+    for row in rows:
+        m = re.fullmatch(r"P(\d+)", str(row[0]).strip(), re.IGNORECASE)
+        if m:
+            nums.append(int(m.group(1)))
+    n = max(nums, default=0) + 1
+    while f"P{n:03d}".upper() in reserved:
+        n += 1
+    return f"P{n:03d}"
+
 def _add_project():
     st.markdown("### Add Project")
-    pdf=_project_options()
     with st.form("v4_add_project",clear_on_submit=True):
+        st.caption("Project ID akan digenerate otomatis oleh sistem saat data disimpan.")
         c1,c2,c3=st.columns(3)
         with c1:
-            pid=st.text_input("Project ID *")
             name=st.text_input("Project Name *")
             ptypes=master_values("project_type","project_type")
             ptype=_select_or_empty("Project Type",ptypes)
         with c2:
-            start=st.date_input("Start Date")
-            finish=st.date_input("Target Finish")
+            start=st.date_input("Start Date",value=None)
+            finish=st.date_input("Target Finish",value=None)
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes)
         with c3:
-            statuses=master_values("project_status","status")
-            status=_select_or_empty("Project Status",statuses)
+            statuses=_project_status_options()
+            status=_select_or_empty("Project Status *",statuses)
             staff=_staff_options()
             leads=staff["name"].tolist() if not staff.empty else []
             lead=_select_or_empty("Lead",leads)
             duration=_project_duration(start,finish)
             st.caption(f"Duration: {duration or '—'} month(s)")
         save=st.form_submit_button("Save Project",type="primary",use_container_width=True)
+
     if save:
-        if not pid.strip() or not name.strip():
-            st.error("Project ID dan Project Name wajib diisi."); return
-        if finish<start:
+        errors=[]
+        if not name.strip(): errors.append("Project Name")
+        if not status: errors.append("Project Status")
+        if errors:
+            st.error("Field wajib diisi: " + ", ".join(errors) + ".")
+            return
+        if start and finish and finish<start:
             st.error("Target Finish tidak boleh lebih awal dari Start Date."); return
+
         conn=get_conn()
         try:
+            pid=_next_project_id(conn)
             conn.execute("""INSERT INTO projects
                 (id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size)
                 VALUES (?,?,?,?,?,?,?,?,?)""",
-                (pid.strip(),name.strip(),ptype,start.isoformat(),finish.isoformat(),
+                (pid,name.strip(),ptype,
+                 start.isoformat() if start else None,
+                 finish.isoformat() if finish else None,
                  _project_duration(start,finish),status,lead,size))
-            conn.commit(); st.success("Project berhasil ditambahkan."); st.rerun()
-        except sqlite3.IntegrityError:
-            st.error("Project ID sudah ada.")
-        finally: conn.close()
+            conn.commit()
+            st.success(f"Project {pid} berhasil ditambahkan.")
+            st.rerun()
+        except sqlite3.IntegrityError as exc:
+            conn.rollback()
+            st.error(f"Project gagal ditambahkan: {exc}")
+        finally:
+            conn.close()
 
 
 def _edit_project(df):
@@ -2695,32 +2732,46 @@ def _edit_project(df):
     with st.form("v4_edit_project"):
         c1,c2,c3=st.columns(3)
         with c1:
+            st.text_input("Project ID",value=str(row["id"]),disabled=True)
             name=st.text_input("Project Name *",value=clean(row["name"]))
             ptypes=master_values("project_type","project_type")
             ptype=_select_or_empty("Project Type",ptypes,index=ptypes.index(row["project_type"]) if row["project_type"] in ptypes else 0)
         with c2:
-            start=safe_date(row["start_date"], date.today())
-            finish=safe_date(row["target_finish"], start)
+            start=safe_date(row["start_date"], None)
+            finish=safe_date(row["target_finish"], None)
             start=st.date_input("Start Date",value=start)
             finish=st.date_input("Target Finish",value=finish)
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes,index=sizes.index(row["project_size"]) if row["project_size"] in sizes else 0)
         with c3:
-            statuses=master_values("project_status","status")
-            status=_select_or_empty("Project Status",statuses,index=statuses.index(row["status"]) if row["status"] in statuses else 0)
+            statuses=_project_status_options()
+            status=_select_or_empty("Project Status *",statuses,index=statuses.index(row["status"]) if row["status"] in statuses else 0)
             sdf=_staff_options(); leads=sdf["name"].tolist() if not sdf.empty else []
             lead=_select_or_empty("Lead",leads,index=leads.index(row["lead"]) if row["lead"] in leads else 0)
             st.caption(f"Duration: {_project_duration(start,finish) or '—'} month(s)")
         save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
     if save:
-        if not name.strip(): st.error("Project Name wajib diisi."); return
-        if finish<start: st.error("Target Finish tidak boleh lebih awal dari Start Date."); return
+        errors=[]
+        if not name.strip(): errors.append("Project Name")
+        if not status: errors.append("Project Status")
+        if errors:
+            st.error("Field wajib diisi: " + ", ".join(errors) + ".")
+            return
+        if start and finish and finish<start:
+            st.error("Target Finish tidak boleh lebih awal dari Start Date."); return
         conn=get_conn()
-        conn.execute("""UPDATE projects SET name=?,project_type=?,start_date=?,target_finish=?,
-            duration_months=?,status=?,lead=?,project_size=? WHERE id=?""",
-            (name.strip(),ptype,start.isoformat(),finish.isoformat(),_project_duration(start,finish),
-             status,lead,size,pid))
-        conn.commit(); conn.close(); st.success("Project berhasil diperbarui."); st.rerun()
+        try:
+            conn.execute("""UPDATE projects SET name=?,project_type=?,start_date=?,target_finish=?,
+                duration_months=?,status=?,lead=?,project_size=? WHERE id=?""",
+                (name.strip(),ptype,
+                 start.isoformat() if start else None,
+                 finish.isoformat() if finish else None,
+                 _project_duration(start,finish),status,lead,size,pid))
+            conn.commit()
+            st.success("Project berhasil diperbarui.")
+            st.rerun()
+        finally:
+            conn.close()
 
 
 def _delete_project(df):
@@ -2738,14 +2789,13 @@ def _delete_project(df):
 
 
 def _project_import_template():
-    """Create an Excel template matching the projects table/input fields."""
+    """Create an Excel template matching the project input fields."""
     sample=pd.DataFrame([{
-        "Project ID":"P001",
         "Project Name":"Example Project",
         "Project Type":"",
         "Start Date":"",
         "Target Finish":"",
-        "Project Status":"",
+        "Project Status":"Active",
         "Lead":"",
         "Project Size":"",
     }])
@@ -2760,8 +2810,7 @@ def _import_project_excel():
     st.markdown("### Import Project from Excel")
     st.caption(
         "Upload Excel untuk merekam banyak Project sekaligus. "
-        "Kolom Excel dapat memiliki nama berbeda; sistem akan mencocokkan "
-        "kolom dengan field Project dan dapat disesuaikan manual."
+        "Project ID tidak perlu diisi karena akan digenerate otomatis oleh sistem."
     )
 
     st.download_button(
@@ -2781,9 +2830,7 @@ def _import_project_excel():
     imported_count=st.session_state.pop("v5_project_import_success",None)
     if imported_count is not None:
         imported_file=st.session_state.pop("v5_project_import_file","")
-        st.success(
-            f"Import berhasil. {imported_count} Project berhasil direkam ke database."
-        )
+        st.success(f"Import berhasil. {imported_count} Project berhasil direkam ke database.")
         if imported_file:
             st.caption(f"File: {imported_file}")
         return
@@ -2810,19 +2857,17 @@ def _import_project_excel():
     st.markdown("#### 1. Mapping Kolom Excel")
     source_cols=[str(c) for c in raw.columns]
     target_fields=[
-        ("project_id","Project ID *"),
         ("name","Project Name *"),
         ("project_type","Project Type"),
         ("start_date","Start Date"),
         ("target_finish","Target Finish"),
-        ("status","Project Status"),
+        ("status","Project Status *"),
         ("lead","Lead"),
         ("project_size","Project Size"),
     ]
 
     norm={_normalize_import_header(c):c for c in source_cols}
     aliases={
-        "project_id":["projectid","id","kodeproject","kodeproyek","projectcode","code"],
         "name":["projectname","name","namaproject","namaproyek","project"],
         "project_type":["projecttype","type","tipeproject","tipeproyek"],
         "start_date":["startdate","start","tanggalmulai","projectstart"],
@@ -2841,11 +2886,10 @@ def _import_project_excel():
                 guess=norm[a]
                 break
         default=options.index(guess) if guess in options else 0
-        mapping[target]=st.selectbox(
-            label,options,index=default,key=f"v5_project_map_{target}"
-        )
+        mapping[target]=st.selectbox(label,options,index=default,key=f"v5_project_map_{target}")
 
-    missing=[label for target,label in target_fields[:2] if mapping[target]=="— Not mapped —"]
+    required_targets={"name","status"}
+    missing=[label for target,label in target_fields if target in required_targets and mapping[target]=="— Not mapped —"]
     if missing:
         st.warning("Field wajib belum dipetakan: "+", ".join(missing))
         return
@@ -2859,7 +2903,7 @@ def _import_project_excel():
     st.caption(f"{len(preview)} baris siap divalidasi.")
 
     project_types=master_values("project_type","project_type")
-    statuses=master_values("project_status","status")
+    statuses=_project_status_options()
     sizes=master_values("project_size","project_size")
     leads_df=_staff_options()
     leads=leads_df["name"].tolist() if not leads_df.empty else []
@@ -2869,7 +2913,6 @@ def _import_project_excel():
     size_lookup={clean(x).lower():x for x in sizes}
     lead_lookup={clean(x).lower():x for x in leads}
 
-    existing_ids=set(clean(x).lower() for x in db_df("SELECT id FROM projects")["id"].tolist())
     valid_rows=[]
     errors=[]
 
@@ -2878,16 +2921,12 @@ def _import_project_excel():
         return "" if src_col=="— Not mapped —" else clean(row[src_col])
 
     for ix,row in raw.iterrows():
-        pid=cell_text("project_id",row)
         name=cell_text("name",row)
         ptype_raw=cell_text("project_type",row)
         status_raw=cell_text("status",row)
         lead_raw=cell_text("lead",row)
         size_raw=cell_text("project_size",row)
 
-        if not pid:
-            errors.append(f"Baris Excel {ix+2}: Project ID kosong.")
-            continue
         if not name:
             errors.append(f"Baris Excel {ix+2}: Project Name kosong.")
             continue
@@ -2897,9 +2936,12 @@ def _import_project_excel():
             errors.append(f"Baris Excel {ix+2}: Project Type '{ptype_raw}' tidak ada di Setup.")
             continue
 
-        status=status_lookup.get(status_raw.lower()) if status_raw else None
-        if status_raw and not status:
-            errors.append(f"Baris Excel {ix+2}: Project Status '{status_raw}' tidak ada di Setup.")
+        if not status_raw:
+            errors.append(f"Baris Excel {ix+2}: Project Status kosong.")
+            continue
+        status=status_lookup.get(status_raw.lower())
+        if not status:
+            errors.append(f"Baris Excel {ix+2}: Project Status '{status_raw}' tidak valid.")
             continue
 
         size=size_lookup.get(size_raw.lower()) if size_raw else None
@@ -2912,28 +2954,30 @@ def _import_project_excel():
             errors.append(f"Baris Excel {ix+2}: Lead '{lead_raw}' tidak tersedia pada Team Active.")
             continue
 
-        start=to_iso_date(row[mapping["start_date"]]) if mapping["start_date"]!="— Not mapped —" else None
-        finish=to_iso_date(row[mapping["target_finish"]]) if mapping["target_finish"]!="— Not mapped —" else None
-        if mapping["start_date"]!="— Not mapped —" and clean(row[mapping["start_date"]]) and not start:
+        start_raw=cell_text("start_date",row)
+        finish_raw=cell_text("target_finish",row)
+        start=to_iso_date(row[mapping["start_date"]]) if mapping["start_date"]!="— Not mapped —" and start_raw else None
+        finish=to_iso_date(row[mapping["target_finish"]]) if mapping["target_finish"]!="— Not mapped —" and finish_raw else None
+
+        if start_raw and not start:
             errors.append(f"Baris Excel {ix+2}: Start Date tidak valid.")
             continue
-        if mapping["target_finish"]!="— Not mapped —" and clean(row[mapping["target_finish"]]) and not finish:
+        if finish_raw and not finish:
             errors.append(f"Baris Excel {ix+2}: Target Finish tidak valid.")
             continue
         if start and finish and finish<start:
             errors.append(f"Baris Excel {ix+2}: Target Finish lebih awal dari Start Date.")
             continue
 
-        duplicate_file=any(clean(r["id"]).lower()==pid.lower() for r in valid_rows)
-        if pid.lower() in existing_ids or duplicate_file:
-            errors.append(f"Baris Excel {ix+2}: Project ID '{pid}' sudah ada.")
-            continue
-
-        duration=_project_duration(parse_date(start),parse_date(finish)) if start and finish else None
         valid_rows.append({
-            "id":pid,"name":name,"project_type":ptype,"start_date":start,
-            "target_finish":finish,"duration_months":duration,"status":status,
-            "lead":lead,"project_size":size,
+            "name":name,
+            "project_type":ptype,
+            "start_date":start,
+            "target_finish":finish,
+            "duration_months":_project_duration(parse_date(start),parse_date(finish)) if start and finish else None,
+            "status":status,
+            "lead":lead,
+            "project_size":size,
         })
 
     if errors:
@@ -2941,11 +2985,34 @@ def _import_project_excel():
         st.dataframe(pd.DataFrame({"Validation Error":errors}),use_container_width=True,hide_index=True)
         return
 
+    # Show the system-generated IDs before saving.
+    conn=get_conn()
+    reserved=[]
+    for r in valid_rows:
+        pid=_next_project_id(conn,reserved)
+        reserved.append(pid)
+        r["id"]=pid
+    conn.close()
+
+    import_preview=pd.DataFrame([{
+        "Project ID":r["id"],
+        "Project Name":r["name"],
+        "Project Type":r["project_type"],
+        "Start Date":r["start_date"],
+        "Target Finish":r["target_finish"],
+        "Project Status":r["status"],
+        "Lead":r["lead"],
+        "Project Size":r["project_size"],
+    } for r in valid_rows])
     st.success(f"{len(valid_rows)} baris lolos validasi dan siap direkam.")
+    st.dataframe(import_preview,use_container_width=True,hide_index=True)
+
     if st.button("Save Imported Project Data",type="primary",use_container_width=True,key="v5_project_import_save"):
         conn=get_conn()
         try:
+            # Re-generate IDs at commit time so concurrent/previous inserts cannot collide.
             for r in valid_rows:
+                r["id"]=_next_project_id(conn)
                 conn.execute("""INSERT INTO projects
                     (id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size)
                     VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -2977,12 +3044,14 @@ def input_project_page():
 
 def allocation_calc(project_id, phase, staff):
     conn=get_conn()
-    prow=conn.execute("SELECT project_size FROM projects WHERE id=?",(project_id,)).fetchone()
+    prow=conn.execute("SELECT project_size,status FROM projects WHERE id=?",(project_id,)).fetchone()
     srow=conn.execute("SELECT multiplier FROM master_project_size WHERE project_size=?",(prow[0],)).fetchone() if prow else None
     prow2=conn.execute("SELECT base_load FROM master_phase WHERE phase=?",(phase,)).fetchone()
     mult=float(srow[0]) if srow else 1.0
     weight=float(prow2[0]) if prow2 else 0.0
-    total=mult*weight
+    # Assignment remains in DB for history/re-activation, but only Active
+    # projects contribute to current workload.
+    total=mult*weight if prow and clean(prow[1]).lower()=="active" else 0.0
     count=conn.execute("SELECT COUNT(*) FROM staff_allocation WHERE project_id=? AND phase=?",(project_id,phase)).fetchone()[0]
     conn.close()
     return mult,weight,total,count+1,total/(count+1) if count+1 else 0
@@ -2992,7 +3061,7 @@ def _allocation_df():
     return db_df("""
         SELECT a.id,a.project_id,p.name AS project_name,a.phase,a.staff,
                s.category AS staff_category,s.primary_role,a.role_on_project,
-               p.project_size
+               p.project_size,p.status AS project_status
         FROM staff_allocation a
         LEFT JOIN projects p ON p.id=a.project_id
         LEFT JOIN staff s ON s.name=a.staff
