@@ -2108,43 +2108,61 @@ def _team_categories():
 
 def _add_team():
     st.markdown("### Add Team Member")
+
+    # Category is intentionally OUTSIDE the form so Streamlit reruns immediately
+    # when the user changes Permanent / Intern / Freelance.
+    cats=_team_categories()
+    category=st.selectbox("Category *",cats,key="v4_add_team_category")
+
     with st.form("v4_add_team", clear_on_submit=True):
-        c1,c2,c3=st.columns(3)
+        c1,c2=st.columns(2)
         with c1:
             name=st.text_input("Staff Name *")
-            category=st.selectbox("Category *", _team_categories())
-        with c2:
             roles=master_values("role","role")
             role=_select_or_empty("Primary Role *",roles)
+        with c2:
             active=st.checkbox("Active",value=True)
-        with c3:
+
+        st.markdown("#### Intern Period")
+        d1,d2=st.columns(2)
+        with d1:
             intern_start=st.date_input(
                 "Intern Start *",
                 value=None,
                 disabled=(category!="Intern"),
+                key="v4_add_intern_start",
             )
+        with d2:
             intern_end=st.date_input(
                 "Intern End *",
                 value=None,
                 disabled=(category!="Intern"),
+                key="v4_add_intern_end",
             )
-        save=st.form_submit_button("Save Team Member",type="primary",use_container_width=True)
+
+        if category!="Intern":
+            st.caption("Intern dates are disabled for Permanent and Freelance.")
+
+        save=st.form_submit_button(
+            "Save Team Member",type="primary",use_container_width=True
+        )
 
     if save:
         errors=[]
         if not name.strip(): errors.append("Staff Name")
         if not role: errors.append("Primary Role")
+
         if category=="Intern":
             if intern_start is None: errors.append("Intern Start")
             if intern_end is None: errors.append("Intern End")
             if intern_start and intern_end and intern_end < intern_start:
                 st.error("Intern End tidak boleh lebih awal dari Intern Start.")
                 return
+
         if errors:
             st.error("Field wajib diisi: " + ", ".join(errors) + ".")
             return
 
-        # Permanent/Freelance must not carry intern dates.
         if category!="Intern":
             intern_start=None
             intern_end=None
@@ -2174,49 +2192,76 @@ def _edit_team(df):
 
     st.markdown("### Edit Team Member")
     ids=df["id"].tolist()
-    labels={int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}" for _,r in df.iterrows()}
-    rid=st.selectbox("Select Team Member",ids,format_func=lambda x:labels[int(x)],key="v4_team_edit_id")
+    labels={
+        int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}"
+        for _,r in df.iterrows()
+    }
+    rid=st.selectbox(
+        "Select Team Member",ids,
+        format_func=lambda x:labels[int(x)],
+        key="v4_team_edit_id"
+    )
     row=df[df.id==rid].iloc[0]
 
+    # Category is outside the form so the Intern date fields react immediately.
+    cats=_team_categories()
+    category=st.selectbox(
+        "Category *",cats,
+        index=cats.index(row["category"]) if row["category"] in cats else 0,
+        key=f"v4_edit_team_category_{rid}"
+    )
+
     with st.form("v4_edit_team"):
-        c1,c2,c3=st.columns(3)
+        c1,c2=st.columns(2)
         with c1:
             name=st.text_input("Staff Name *",value=clean(row["name"]))
-            cats=_team_categories()
-            category=st.selectbox(
-                "Category *",cats,
-                index=cats.index(row["category"]) if row["category"] in cats else 0
-            )
-        with c2:
             roles=master_values("role","role")
             role=_select_or_empty(
                 "Primary Role *",roles,
-                index=roles.index(row["primary_role"]) if row["primary_role"] in roles else 0
+                index=roles.index(row["primary_role"])
+                if row["primary_role"] in roles else 0
             )
+        with c2:
             active=st.checkbox("Active",value=bool(row["active"]))
-        with c3:
+
+        st.markdown("#### Intern Period")
+        d1,d2=st.columns(2)
+        with d1:
             sd=pd.to_datetime(row["intern_start"]).date() if row["intern_start"] else None
-            ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
             intern_start=st.date_input(
-                "Intern Start *",value=sd,
-                disabled=(category!="Intern")
+                "Intern Start *",
+                value=sd,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_start_{rid}",
             )
+        with d2:
+            ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
             intern_end=st.date_input(
-                "Intern End *",value=ed,
-                disabled=(category!="Intern")
+                "Intern End *",
+                value=ed,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_end_{rid}",
             )
-        save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+
+        if category!="Intern":
+            st.caption("Intern dates are disabled for Permanent and Freelance.")
+
+        save=st.form_submit_button(
+            "Save Changes",type="primary",use_container_width=True
+        )
 
     if save:
         errors=[]
         if not name.strip(): errors.append("Staff Name")
         if not role: errors.append("Primary Role")
+
         if category=="Intern":
             if intern_start is None: errors.append("Intern Start")
             if intern_end is None: errors.append("Intern End")
             if intern_start and intern_end and intern_end < intern_start:
                 st.error("Intern End tidak boleh lebih awal dari Intern Start.")
                 return
+
         if errors:
             st.error("Field wajib diisi: " + ", ".join(errors) + ".")
             return
