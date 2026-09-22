@@ -2221,10 +2221,13 @@ def _edit_team(df):
         for _,r in df.iterrows()
     }
     rid=st.selectbox(
-        "Select Team Member",ids,
-        format_func=lambda x:labels[int(x)],
+        "Select Team Member",[None]+ids,index=0,
+        format_func=lambda x:"— Select Team Member —" if x is None else labels[int(x)],
         key="v4_team_edit_id"
     )
+    if rid is None:
+        st.info("Pilih Team Member terlebih dahulu.")
+        return
     row=df[df.id==rid].iloc[0]
 
     # Category is outside the form so the Intern date fields react immediately.
@@ -2317,11 +2320,16 @@ def _delete_team(df):
 
     st.markdown("### Delete Team Member")
     labels={int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}" for _,r in df.iterrows()}
-    rid=st.selectbox("Select Team Member",list(labels),format_func=lambda x:labels[x],key="v4_team_del_id")
+    rid=st.selectbox("Select Team Member",[None]+list(labels),index=0,
+        format_func=lambda x:"— Select Team Member —" if x is None else labels[x],
+        key="v4_team_del_id")
+    if rid is None:
+        st.info("Pilih Team Member terlebih dahulu.")
+        return
     row=df[df.id==rid].iloc[0]
     st.warning(f"Delete **{row['name']}**? Data akan dihapus dari Team.")
 
-    confirm=st.checkbox("Confirm deletion",key="v4_team_delete_confirm")
+    confirm=st.checkbox("Confirm deletion",value=False,key="v4_team_delete_confirm")
     if st.button(
         "Delete Permanently",
         key="v4_team_delete",
