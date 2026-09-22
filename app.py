@@ -3394,39 +3394,73 @@ def input_activities_page():
 
 
 def ensure_freelance_mapping_schema():
-    """Ensure Freelance Project Mapping is independent from Project Lead.
-    A project may have many freelancers; each freelancer may hold many projects.
-    The only duplicate that is blocked is the same freelancer + same project."""
+    """Ensure Freelance Project Mapping uses the current status-only model.
+
+    Lead assignment is independent from this table. A project can therefore
+    have a Lead and any number of Freelance mappings.
+    """
     conn=get_conn()
     try:
-        cols=[r[1] for r in conn.execute(
+        info=conn.execute(
             "PRAGMA table_info(freelance_project_mapping)"
-        ).fetchall()]
+        ).fetchall()
 
-        if not cols:
+        if not info:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS freelance_project_mapping (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     freelancer TEXT NOT NULL,
                     project_id TEXT NOT NULL,
-                    start_date TEXT,
-                    end_date TEXT,
                     mapping_status TEXT,
-                    notes TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-        elif "mapping_status" not in cols:
-            conn.execute(
-                "ALTER TABLE freelance_project_mapping ADD COLUMN mapping_status TEXT"
+        else:
+            cols={r[1]:r for r in info}
+            # Legacy versions had start_date/end_date/notes. If any of those
+            # are NOT NULL, SQLite requires a migration because the new UI
+            # intentionally does not provide those fields.
+            legacy_required=any(
+                name in cols and int(cols[name][3])==1
+                for name in ("start_date","end_date","notes")
             )
+            if legacy_required:
+                conn.execute("""
+                    CREATE TABLE freelance_project_mapping_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        freelancer TEXT NOT NULL,
+                        project_id TEXT NOT NULL,
+                        mapping_status TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("""
+                    INSERT INTO freelance_project_mapping_new
+                        (id,freelancer,project_id,mapping_status,created_at)
+                    SELECT id,freelancer,project_id,mapping_status,created_at
+                    FROM freelance_project_mapping
+                """)
+                conn.execute("DROP TABLE freelance_project_mapping")
+                conn.execute(
+                    "ALTER TABLE freelance_project_mapping_new "
+                    "RENAME TO freelance_project_mapping"
+                )
+            elif "mapping_status" not in cols:
+                conn.execute(
+                    "ALTER TABLE freelance_project_mapping "
+                    "ADD COLUMN mapping_status TEXT"
+                )
 
-        # Migrate/normalize the duplicate rule: Lead in projects is NOT
-        # considered a mapping. Multiple freelancers may map to one project.
-        conn.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_freelance_project_pair
-            ON freelance_project_mapping(freelancer, project_id)
-        """)
+        # Duplicate rule is only Freelance + Project. Lead is irrelevant.
+        try:
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_freelance_project_pair
+                ON freelance_project_mapping(freelancer, project_id)
+            """)
+        except sqlite3.IntegrityError:
+            # Keep existing duplicate legacy rows; application-level checks
+            # prevent creating new duplicates.
+            pass
 
         master=master_values("mapping_status","status")
         default_status=master[0] if master else None
@@ -3437,13 +3471,8 @@ def ensure_freelance_mapping_schema():
                 (default_status,)
             )
         conn.commit()
-    except sqlite3.IntegrityError:
-        # Existing duplicate rows are retained; the application-level check
-        # below prevents adding another identical pair.
-        conn.rollback()
     finally:
         conn.close()
-
 
 def freelance_mapping_df():
     return db_df("""
