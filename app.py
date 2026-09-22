@@ -2401,6 +2401,22 @@ def _import_team_excel():
         type=["xlsx","xlsm"],
         key="v4c_team_excel",
     )
+
+    # After a successful save, stop processing the still-selected uploader.
+    # Streamlit reruns the script, but the uploaded file remains in session;
+    # without this guard it would be validated a second time and appear as
+    # duplicate data.
+    if st.session_state.pop("v4c_team_import_success", None) is not None:
+        imported_count = st.session_state.pop("v4c_team_import_success")
+        imported_file = st.session_state.pop("v4c_team_import_file", "")
+        st.success(
+            f"Import berhasil. {imported_count} Team Member "
+            f"berhasil direkam ke database."
+        )
+        if imported_file:
+            st.caption(f"File: {imported_file}")
+        return
+
     if uploaded is None:
         return
 
@@ -2601,7 +2617,8 @@ def _import_team_excel():
                     ),
                 )
             conn.commit()
-            st.success(f"{len(valid_rows)} Team Member berhasil direkam ke database.")
+            st.session_state["v4c_team_import_success"] = len(valid_rows)
+            st.session_state["v4c_team_import_file"] = uploaded.name
             st.rerun()
         except sqlite3.IntegrityError as exc:
             conn.rollback()
