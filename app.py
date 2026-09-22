@@ -2736,16 +2736,243 @@ def _delete_project(df):
         conn.commit(); conn.close(); st.success("Project diarsipkan agar histori aktivitas tetap aman."); st.rerun()
 
 
+
+def _project_import_template():
+    """Create an Excel template matching the projects table/input fields."""
+    sample=pd.DataFrame([{
+        "Project ID":"P001",
+        "Project Name":"Example Project",
+        "Project Type":"",
+        "Start Date":"",
+        "Target Finish":"",
+        "Project Status":"",
+        "Lead":"",
+        "Project Size":"",
+    }])
+    bio=BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        sample.to_excel(writer, index=False, sheet_name="Project Import")
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def _import_project_excel():
+    st.markdown("### Import Project from Excel")
+    st.caption(
+        "Upload Excel untuk merekam banyak Project sekaligus. "
+        "Kolom Excel dapat memiliki nama berbeda; sistem akan mencocokkan "
+        "kolom dengan field Project dan dapat disesuaikan manual."
+    )
+
+    st.download_button(
+        "Download Excel Template",
+        data=_project_import_template(),
+        file_name="Project_Import_Template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="v5_project_template",
+    )
+
+    uploaded=st.file_uploader(
+        "Upload Excel",
+        type=["xlsx","xlsm"],
+        key="v5_project_excel",
+    )
+
+    imported_count=st.session_state.pop("v5_project_import_success",None)
+    if imported_count is not None:
+        imported_file=st.session_state.pop("v5_project_import_file","")
+        st.success(
+            f"Import berhasil. {imported_count} Project berhasil direkam ke database."
+        )
+        if imported_file:
+            st.caption(f"File: {imported_file}")
+        return
+
+    if uploaded is None:
+        return
+
+    try:
+        xls=pd.ExcelFile(uploaded)
+        sheet=st.selectbox("Sheet",xls.sheet_names,key="v5_project_import_sheet")
+        raw=pd.read_excel(uploaded,sheet_name=sheet,engine="openpyxl")
+    except Exception as exc:
+        st.error(f"Excel tidak dapat dibaca: {exc}")
+        return
+
+    if raw.empty:
+        st.warning("Sheet tidak memiliki data.")
+        return
+    raw=raw.dropna(how="all").copy()
+    if raw.empty:
+        st.warning("Tidak ada baris data.")
+        return
+
+    st.markdown("#### 1. Mapping Kolom Excel")
+    source_cols=[str(c) for c in raw.columns]
+    target_fields=[
+        ("project_id","Project ID *"),
+        ("name","Project Name *"),
+        ("project_type","Project Type"),
+        ("start_date","Start Date"),
+        ("target_finish","Target Finish"),
+        ("status","Project Status"),
+        ("lead","Lead"),
+        ("project_size","Project Size"),
+    ]
+
+    norm={_normalize_import_header(c):c for c in source_cols}
+    aliases={
+        "project_id":["projectid","id","kodeproject","kodeproyek","projectcode","code"],
+        "name":["projectname","name","namaproject","namaproyek","project"],
+        "project_type":["projecttype","type","tipeproject","tipeproyek"],
+        "start_date":["startdate","start","tanggalmulai","projectstart"],
+        "target_finish":["targetfinish","finishdate","targetdate","enddate","tanggalselesai","projectfinish"],
+        "status":["projectstatus","status","statusproject","statusproyek"],
+        "lead":["lead","projectlead","pic","leader"],
+        "project_size":["projectsize","size","ukuranproject","ukuranproyek"],
+    }
+
+    mapping={}
+    options=["— Not mapped —"]+source_cols
+    for target,label in target_fields:
+        guess="— Not mapped —"
+        for a in aliases[target]:
+            if a in norm:
+                guess=norm[a]
+                break
+        default=options.index(guess) if guess in options else 0
+        mapping[target]=st.selectbox(
+            label,options,index=default,key=f"v5_project_map_{target}"
+        )
+
+    missing=[label for target,label in target_fields[:2] if mapping[target]=="— Not mapped —"]
+    if missing:
+        st.warning("Field wajib belum dipetakan: "+", ".join(missing))
+        return
+
+    st.markdown("#### 2. Preview Hasil Mapping")
+    preview=pd.DataFrame(index=raw.index)
+    for target,label in target_fields:
+        src_col=mapping[target]
+        preview[label.replace(" *","")]=raw[src_col] if src_col!="— Not mapped —" else None
+    st.dataframe(preview.head(20),use_container_width=True,hide_index=True)
+    st.caption(f"{len(preview)} baris siap divalidasi.")
+
+    project_types=master_values("project_type","project_type")
+    statuses=master_values("project_status","status")
+    sizes=master_values("project_size","project_size")
+    leads_df=_staff_options()
+    leads=leads_df["name"].tolist() if not leads_df.empty else []
+
+    type_lookup={clean(x).lower():x for x in project_types}
+    status_lookup={clean(x).lower():x for x in statuses}
+    size_lookup={clean(x).lower():x for x in sizes}
+    lead_lookup={clean(x).lower():x for x in leads}
+
+    existing_ids=set(clean(x).lower() for x in db_df("SELECT id FROM projects")["id"].tolist())
+    valid_rows=[]
+    errors=[]
+
+    def cell_text(target,row):
+        src_col=mapping[target]
+        return "" if src_col=="— Not mapped —" else clean(row[src_col])
+
+    for ix,row in raw.iterrows():
+        pid=cell_text("project_id",row)
+        name=cell_text("name",row)
+        ptype_raw=cell_text("project_type",row)
+        status_raw=cell_text("status",row)
+        lead_raw=cell_text("lead",row)
+        size_raw=cell_text("project_size",row)
+
+        if not pid:
+            errors.append(f"Baris Excel {ix+2}: Project ID kosong.")
+            continue
+        if not name:
+            errors.append(f"Baris Excel {ix+2}: Project Name kosong.")
+            continue
+
+        ptype=type_lookup.get(ptype_raw.lower()) if ptype_raw else None
+        if ptype_raw and not ptype:
+            errors.append(f"Baris Excel {ix+2}: Project Type '{ptype_raw}' tidak ada di Setup.")
+            continue
+
+        status=status_lookup.get(status_raw.lower()) if status_raw else None
+        if status_raw and not status:
+            errors.append(f"Baris Excel {ix+2}: Project Status '{status_raw}' tidak ada di Setup.")
+            continue
+
+        size=size_lookup.get(size_raw.lower()) if size_raw else None
+        if size_raw and not size:
+            errors.append(f"Baris Excel {ix+2}: Project Size '{size_raw}' tidak ada di Setup.")
+            continue
+
+        lead=lead_lookup.get(lead_raw.lower()) if lead_raw else None
+        if lead_raw and not lead:
+            errors.append(f"Baris Excel {ix+2}: Lead '{lead_raw}' tidak tersedia pada Team Active.")
+            continue
+
+        start=to_iso_date(row[mapping["start_date"]]) if mapping["start_date"]!="— Not mapped —" else None
+        finish=to_iso_date(row[mapping["target_finish"]]) if mapping["target_finish"]!="— Not mapped —" else None
+        if mapping["start_date"]!="— Not mapped —" and clean(row[mapping["start_date"]]) and not start:
+            errors.append(f"Baris Excel {ix+2}: Start Date tidak valid.")
+            continue
+        if mapping["target_finish"]!="— Not mapped —" and clean(row[mapping["target_finish"]]) and not finish:
+            errors.append(f"Baris Excel {ix+2}: Target Finish tidak valid.")
+            continue
+        if start and finish and finish<start:
+            errors.append(f"Baris Excel {ix+2}: Target Finish lebih awal dari Start Date.")
+            continue
+
+        duplicate_file=any(clean(r["id"]).lower()==pid.lower() for r in valid_rows)
+        if pid.lower() in existing_ids or duplicate_file:
+            errors.append(f"Baris Excel {ix+2}: Project ID '{pid}' sudah ada.")
+            continue
+
+        duration=_project_duration(parse_date(start),parse_date(finish)) if start and finish else None
+        valid_rows.append({
+            "id":pid,"name":name,"project_type":ptype,"start_date":start,
+            "target_finish":finish,"duration_months":duration,"status":status,
+            "lead":lead,"project_size":size,
+        })
+
+    if errors:
+        st.error(f"Ditemukan {len(errors)} masalah. Tidak ada data yang direkam.")
+        st.dataframe(pd.DataFrame({"Validation Error":errors}),use_container_width=True,hide_index=True)
+        return
+
+    st.success(f"{len(valid_rows)} baris lolos validasi dan siap direkam.")
+    if st.button("Save Imported Project Data",type="primary",use_container_width=True,key="v5_project_import_save"):
+        conn=get_conn()
+        try:
+            for r in valid_rows:
+                conn.execute("""INSERT INTO projects
+                    (id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size)
+                    VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (r["id"],r["name"],r["project_type"],r["start_date"],r["target_finish"],
+                     r["duration_months"],r["status"],r["lead"],r["project_size"]))
+            conn.commit()
+            st.session_state["v5_project_import_success"]=len(valid_rows)
+            st.session_state["v5_project_import_file"]=uploaded.name
+            st.rerun()
+        except sqlite3.IntegrityError as exc:
+            conn.rollback()
+            st.error(f"Import dibatalkan karena konflik database: {exc}")
+        finally:
+            conn.close()
+
+
 def input_project_page():
     st.markdown('<div class="app-title">Input Project</div>',unsafe_allow_html=True)
     st.markdown("Manage projects used by allocation, activities and dashboards.")
     df=db_df("""SELECT id,name,project_type,start_date,target_finish,duration_months,status,lead,project_size
                 FROM projects ORDER BY id""")
     st.dataframe(df,use_container_width=True,hide_index=True)
-    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    a,e,d,i=st.tabs(["＋ Add","✎ Edit","🗑 Delete","⇧ Import Excel"])
     with a:_add_project()
     with e:_edit_project(df)
     with d:_delete_project(df)
+    with i:_import_project_excel()
 
 
 def allocation_calc(project_id, phase, staff):
