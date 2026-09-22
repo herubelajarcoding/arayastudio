@@ -2184,7 +2184,6 @@ def _add_team():
         finally:
             conn.close()
 
-
 def _edit_team(df):
     if df.empty:
         st.info("Belum ada team member.")
@@ -2285,7 +2284,6 @@ def _edit_team(df):
             st.error("Staff Name sudah digunakan.")
         finally:
             conn.close()
-
 
 def _delete_team(df):
     if df.empty:
