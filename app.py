@@ -3454,10 +3454,17 @@ def input_freelance_mapping_page():
             with st.form("v4_add_freelance_mapping",clear_on_submit=True):
                 people=freelancers_df["name"].tolist()
                 pids=projects["id"].tolist()
+                project_labels={
+                    str(r["id"]): f"{r['id']} • {r['name']}"
+                    for _,r in projects.iterrows()
+                }
                 c1,c2=st.columns(2)
                 with c1:
                     freelancer=st.selectbox("Freelance *",people)
-                    project_id=st.selectbox("Project *",pids)
+                    project_id=st.selectbox(
+                        "Project *",pids,
+                        format_func=lambda x: project_labels.get(str(x), str(x))
+                    )
                 with c2:
                     mapping_status=_select_or_empty("Mapping Status *",statuses)
                 save=st.form_submit_button("Save Mapping",type="primary",use_container_width=True)
@@ -3496,6 +3503,10 @@ def input_freelance_mapping_page():
                 row=df[df.id==rid].iloc[0]
                 people=freelancers_df["name"].tolist()
                 pids=projects["id"].tolist()
+                project_labels={
+                    str(r["id"]): f"{r['id']} • {r['name']}"
+                    for _,r in projects.iterrows()
+                }
                 with st.form("v5c_edit_freelance_mapping"):
                     freelancer=st.selectbox(
                         "Freelance *",people,
@@ -3503,7 +3514,8 @@ def input_freelance_mapping_page():
                     )
                     project_id=st.selectbox(
                         "Project *",pids,
-                        index=pids.index(row["project_id"]) if row["project_id"] in pids else 0
+                        index=pids.index(row["project_id"]) if row["project_id"] in pids else 0,
+                        format_func=lambda x: project_labels.get(str(x), str(x))
                     )
                     mapping_status=_select_or_empty(
                         "Mapping Status *",statuses,
