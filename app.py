@@ -604,6 +604,17 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(project_id, phase, staff)
         );
+
+        CREATE TABLE IF NOT EXISTS freelance_project_mapping (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            freelancer TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(freelancer, project_id, start_date, end_date)
+        );
         """
     )
     conn.commit()
@@ -2073,7 +2084,14 @@ def _project_options():
 
 
 def _staff_options():
-    return db_df("SELECT name,category,primary_role,active FROM staff ORDER BY name")
+    # Active controls dropdown visibility only. Inactive staff remain stored
+    # in the database and remain visible/manageable in Input Team.
+    return db_df("""
+        SELECT id,name,category,primary_role,active
+        FROM staff
+        WHERE active=1
+        ORDER BY name
+    """)
 
 
 def _project_name(pid):
@@ -2084,30 +2102,53 @@ def _project_name(pid):
     return row[0] if row else ""
 
 
+def _team_categories():
+    return ["Permanent", "Intern", "Freelance"]
+
+
 def _add_team():
     st.markdown("### Add Team Member")
     with st.form("v4_add_team", clear_on_submit=True):
         c1,c2,c3=st.columns(3)
         with c1:
             name=st.text_input("Staff Name *")
-            category=st.selectbox("Category", ["Permanent","Intern"])
+            category=st.selectbox("Category *", _team_categories())
         with c2:
             roles=master_values("role","role")
             role=_select_or_empty("Primary Role *",roles)
             active=st.checkbox("Active",value=True)
         with c3:
-            intern_start=st.date_input("Intern Start", value=None)
-            intern_end=st.date_input("Intern End", value=None)
+            intern_start=st.date_input(
+                "Intern Start *",
+                value=None,
+                disabled=(category!="Intern"),
+            )
+            intern_end=st.date_input(
+                "Intern End *",
+                value=None,
+                disabled=(category!="Intern"),
+            )
         save=st.form_submit_button("Save Team Member",type="primary",use_container_width=True)
+
     if save:
-        if not name.strip() or not role:
-            st.error("Staff Name dan Primary Role wajib diisi.")
+        errors=[]
+        if not name.strip(): errors.append("Staff Name")
+        if not role: errors.append("Primary Role")
+        if category=="Intern":
+            if intern_start is None: errors.append("Intern Start")
+            if intern_end is None: errors.append("Intern End")
+            if intern_start and intern_end and intern_end < intern_start:
+                st.error("Intern End tidak boleh lebih awal dari Intern Start.")
+                return
+        if errors:
+            st.error("Field wajib diisi: " + ", ".join(errors) + ".")
             return
+
+        # Permanent/Freelance must not carry intern dates.
         if category!="Intern":
-            intern_start=None; intern_end=None
-        elif intern_start and intern_end and intern_end < intern_start:
-            st.error("Intern End tidak boleh lebih awal dari Intern Start.")
-            return
+            intern_start=None
+            intern_end=None
+
         conn=get_conn()
         try:
             conn.execute("""INSERT INTO staff
@@ -2122,38 +2163,68 @@ def _add_team():
             st.rerun()
         except sqlite3.IntegrityError:
             st.error("Staff Name sudah ada.")
-        finally: conn.close()
+        finally:
+            conn.close()
 
 
 def _edit_team(df):
-    if df.empty: return
+    if df.empty:
+        st.info("Belum ada team member.")
+        return
+
     st.markdown("### Edit Team Member")
     ids=df["id"].tolist()
     labels={int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Team Member",ids,format_func=lambda x:labels[int(x)],key="v4_team_edit_id")
     row=df[df.id==rid].iloc[0]
+
     with st.form("v4_edit_team"):
         c1,c2,c3=st.columns(3)
         with c1:
             name=st.text_input("Staff Name *",value=clean(row["name"]))
-            cats=["Permanent","Intern"]
-            category=st.selectbox("Category",cats,index=cats.index(row["category"]) if row["category"] in cats else 0)
+            cats=_team_categories()
+            category=st.selectbox(
+                "Category *",cats,
+                index=cats.index(row["category"]) if row["category"] in cats else 0
+            )
         with c2:
             roles=master_values("role","role")
-            role=_select_or_empty("Primary Role *",roles,index=roles.index(row["primary_role"]) if row["primary_role"] in roles else 0)
+            role=_select_or_empty(
+                "Primary Role *",roles,
+                index=roles.index(row["primary_role"]) if row["primary_role"] in roles else 0
+            )
             active=st.checkbox("Active",value=bool(row["active"]))
         with c3:
             sd=pd.to_datetime(row["intern_start"]).date() if row["intern_start"] else None
             ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
-            intern_start=st.date_input("Intern Start",value=sd)
-            intern_end=st.date_input("Intern End",value=ed)
+            intern_start=st.date_input(
+                "Intern Start *",value=sd,
+                disabled=(category!="Intern")
+            )
+            intern_end=st.date_input(
+                "Intern End *",value=ed,
+                disabled=(category!="Intern")
+            )
         save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+
     if save:
-        if not name.strip() or not role:
-            st.error("Staff Name dan Primary Role wajib diisi."); return
-        if category!="Intern": intern_start=None; intern_end=None
-        if category=="Intern" and intern_start and intern_end and intern_end<intern_start:
-            st.error("Intern End tidak boleh lebih awal dari Intern Start."); return
+        errors=[]
+        if not name.strip(): errors.append("Staff Name")
+        if not role: errors.append("Primary Role")
+        if category=="Intern":
+            if intern_start is None: errors.append("Intern Start")
+            if intern_end is None: errors.append("Intern End")
+            if intern_start and intern_end and intern_end < intern_start:
+                st.error("Intern End tidak boleh lebih awal dari Intern Start.")
+                return
+        if errors:
+            st.error("Field wajib diisi: " + ", ".join(errors) + ".")
+            return
+
+        if category!="Intern":
+            intern_start=None
+            intern_end=None
+
         conn=get_conn()
         try:
             conn.execute("""UPDATE staff SET name=?,category=?,primary_role=?,
@@ -2162,27 +2233,54 @@ def _edit_team(df):
                  intern_start.isoformat() if intern_start else None,
                  intern_end.isoformat() if intern_end else None,
                  1 if active else 0,int(rid)))
-            conn.commit(); st.success("Data berhasil diperbarui."); st.rerun()
+            conn.commit()
+            st.success("Data berhasil diperbarui.")
+            st.rerun()
         except sqlite3.IntegrityError:
             st.error("Staff Name sudah digunakan.")
-        finally: conn.close()
+        finally:
+            conn.close()
 
 
 def _delete_team(df):
-    if df.empty: return
+    if df.empty:
+        st.info("Belum ada team member.")
+        return
+
     st.markdown("### Delete Team Member")
-    labels={int(r.id):f"{r['name']} • {r['primary_role']}" for _,r in df.iterrows()}
+    labels={int(r.id):f"{r['name']} • {r['category']} • {r['primary_role']}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Team Member",list(labels),format_func=lambda x:labels[x],key="v4_team_del_id")
-    if st.button("Delete Permanently",key="v4_team_delete",type="secondary"):
+    row=df[df.id==rid].iloc[0]
+    st.warning(f"Delete **{row['name']}**? Data akan dihapus dari Team.")
+
+    confirm=st.checkbox("Confirm deletion",key="v4_team_delete_confirm")
+    if st.button(
+        "Delete Permanently",
+        key="v4_team_delete",
+        type="secondary",
+        use_container_width=True,
+        disabled=not confirm,
+    ):
         conn=get_conn()
-        conn.execute("UPDATE staff SET active=0 WHERE id=?",(int(rid),))
-        conn.commit(); conn.close()
-        st.success("Team member dinonaktifkan."); st.rerun()
+        try:
+            # DELETE means physical deletion from the database.
+            # Active/Inactive is a separate visibility control for dropdowns.
+            conn.execute("DELETE FROM freelance_project_mapping WHERE freelancer=?",(row["name"],))
+            conn.execute("DELETE FROM staff WHERE id=?",(int(rid),))
+            conn.commit()
+            st.success("Team member benar-benar dihapus dari database.")
+            st.rerun()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            st.error("Staff masih digunakan oleh data lain dan tidak dapat dihapus.")
+        finally:
+            conn.close()
 
 
 def input_team_page():
     st.markdown('<div class="app-title">Input Team</div>',unsafe_allow_html=True)
     st.markdown("Manage team members used throughout the Control Board.")
+    st.caption("Active = muncul pada dropdown di modul lain. Inactive = tetap tersimpan di database, tetapi tidak muncul pada dropdown. Delete = menghapus permanen dari database.")
     df=db_df("SELECT id,name,category,primary_role,intern_start,intern_end,active FROM staff ORDER BY name")
     st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
     a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
@@ -2636,6 +2734,124 @@ def input_activities_page():
         with d:_delete_other(df)
 
 
+
+def freelance_mapping_df():
+    return db_df("""
+        SELECT m.id, m.freelancer, m.project_id,
+               COALESCE(p.name,'') AS project_name,
+               m.start_date, m.end_date, m.notes
+        FROM freelance_project_mapping m
+        LEFT JOIN projects p ON p.id=m.project_id
+        ORDER BY m.freelancer, m.start_date, m.id
+    """)
+
+
+def input_freelance_mapping_page():
+    st.markdown('<div class="app-title">Freelance Project Mapping</div>',unsafe_allow_html=True)
+    st.markdown("Map each freelance team member to one or more projects and define the assignment period.")
+
+    freelancers_df=db_df("""
+        SELECT name, primary_role
+        FROM staff
+        WHERE category='Freelance' AND active=1
+        ORDER BY name
+    """)
+    projects=_project_options()
+    df=freelance_mapping_df()
+
+    if freelancers_df.empty:
+        st.info("Belum ada Freelance aktif. Tambahkan Category = Freelance di Input Team terlebih dahulu.")
+    if projects.empty:
+        st.info("Belum ada Project. Tambahkan Project di Input Project terlebih dahulu.")
+
+    st.markdown("### Current Mapping")
+    st.dataframe(
+        df.drop(columns=["id"],errors="ignore"),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    add_tab, edit_tab, delete_tab = st.tabs(["＋ Add Mapping","✎ Edit Mapping","🗑 Delete Mapping"])
+
+    with add_tab:
+        if not freelancers_df.empty and not projects.empty:
+            with st.form("v4_add_freelance_mapping",clear_on_submit=True):
+                people=freelancers_df["name"].tolist()
+                pids=projects["id"].tolist()
+                c1,c2=st.columns(2)
+                with c1:
+                    freelancer=st.selectbox("Freelance *",people)
+                    project_id=st.selectbox("Project *",pids)
+                with c2:
+                    start=st.date_input("Assignment Start *")
+                    end=st.date_input("Assignment End *")
+                notes=st.text_area("Notes")
+                save=st.form_submit_button("Save Mapping",type="primary",use_container_width=True)
+
+            if save:
+                if end<start:
+                    st.error("Assignment End tidak boleh lebih awal dari Assignment Start.")
+                else:
+                    conn=get_conn()
+                    try:
+                        conn.execute("""INSERT INTO freelance_project_mapping
+                            (freelancer,project_id,start_date,end_date,notes)
+                            VALUES (?,?,?,?,?)""",
+                            (freelancer,project_id,start.isoformat(),end.isoformat(),notes))
+                        conn.commit()
+                        st.success("Freelance project mapping berhasil ditambahkan.")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Mapping yang sama sudah ada.")
+                    finally:
+                        conn.close()
+
+    with edit_tab:
+        if not df.empty and not freelancers_df.empty and not projects.empty:
+            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.start_date} – {r.end_date}" for _,r in df.iterrows()}
+            rid=st.selectbox("Select Mapping",list(labels),format_func=lambda x:labels[x],key="v4_fm_edit_id")
+            row=df[df.id==rid].iloc[0]
+            people=freelancers_df["name"].tolist()
+            pids=projects["id"].tolist()
+            with st.form("v4_edit_freelance_mapping"):
+                freelancer=st.selectbox("Freelance *",people,index=people.index(row["freelancer"]) if row["freelancer"] in people else 0)
+                project_id=st.selectbox("Project *",pids,index=pids.index(row["project_id"]) if row["project_id"] in pids else 0)
+                start=st.date_input("Assignment Start *",value=pd.to_datetime(row["start_date"]).date())
+                end=st.date_input("Assignment End *",value=pd.to_datetime(row["end_date"]).date())
+                notes=st.text_area("Notes",value=clean(row["notes"]))
+                save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+            if save:
+                if end<start:
+                    st.error("Assignment End tidak boleh lebih awal dari Assignment Start.")
+                else:
+                    conn=get_conn()
+                    try:
+                        conn.execute("""UPDATE freelance_project_mapping
+                            SET freelancer=?,project_id=?,start_date=?,end_date=?,notes=?
+                            WHERE id=?""",
+                            (freelancer,project_id,start.isoformat(),end.isoformat(),notes,int(rid)))
+                        conn.commit()
+                        st.success("Mapping berhasil diperbarui.")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Mapping yang sama sudah ada.")
+                    finally:
+                        conn.close()
+
+    with delete_tab:
+        if not df.empty:
+            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.start_date} – {r.end_date}" for _,r in df.iterrows()}
+            rid=st.selectbox("Select Mapping to Delete",list(labels),format_func=lambda x:labels[x],key="v4_fm_del_id")
+            confirm=st.checkbox("Confirm deletion",key="v4_fm_del_confirm")
+            if st.button("Delete Permanently",key="v4_fm_delete",type="secondary",disabled=not confirm,use_container_width=True):
+                conn=get_conn()
+                conn.execute("DELETE FROM freelance_project_mapping WHERE id=?",(int(rid),))
+                conn.commit()
+                conn.close()
+                st.success("Mapping berhasil dihapus.")
+                st.rerun()
+
+
 def input_data_page(submodule):
     ensure_v4_input_schema()
     if submodule=="Input Team":
@@ -2644,6 +2860,8 @@ def input_data_page(submodule):
         input_project_page()
     elif submodule=="Staff Allocation":
         input_allocation_page()
+    elif submodule=="Freelance Project Mapping":
+        input_freelance_mapping_page()
     elif submodule=="Activities":
         input_activities_page()
     else:
@@ -2702,7 +2920,7 @@ st.sidebar.markdown(
     '<div class="v3-module-heading">✎&nbsp;&nbsp;Input Data</div>',
     unsafe_allow_html=True,
 )
-for item in ["Input Team", "Input Project", "Staff Allocation", "Activities"]:
+for item in ["Input Team", "Input Project", "Staff Allocation", "Freelance Project Mapping", "Activities"]:
     selected = (
         st.session_state.v3a_module == "Input Data"
         and st.session_state.v3a_input_submodule == item
