@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import date, datetime, time, timedelta
 import calendar
 import html
+from io import BytesIO
 
 import pandas as pd
 import streamlit as st
@@ -2353,16 +2354,273 @@ def _delete_team(df):
             conn.close()
 
 
+
+def _normalize_import_header(v):
+    """Normalize Excel headers for automatic matching."""
+    s=clean(v).lower()
+    for ch in [" ", "_", "-", "/", "\\", ".", "(", ")", "*"]:
+        s=s.replace(ch,"")
+    return s
+
+
+def _team_import_template():
+    """Create a simple Excel template matching the staff table fields."""
+    sample=pd.DataFrame([{
+        "Staff Name":"Example Staff",
+        "Category":"Permanent",
+        "Primary Role":"Architect",
+        "Intern Start":"",
+        "Intern End":"",
+        "Active":True,
+    }])
+    bio=BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        sample.to_excel(writer, index=False, sheet_name="Team Import")
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def _import_team_excel():
+    st.markdown("### Import Team from Excel")
+    st.caption(
+        "Upload Excel untuk merekam banyak Team Member sekaligus. "
+        "Kolom Excel dapat memiliki nama berbeda; pada langkah berikutnya "
+        "kolom akan dipetakan ke field Team."
+    )
+
+    st.download_button(
+        "Download Excel Template",
+        data=_team_import_template(),
+        file_name="Team_Import_Template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="v4c_team_template",
+    )
+
+    uploaded=st.file_uploader(
+        "Upload Excel",
+        type=["xlsx","xlsm"],
+        key="v4c_team_excel",
+    )
+    if uploaded is None:
+        return
+
+    try:
+        xls=pd.ExcelFile(uploaded)
+        sheet=st.selectbox("Sheet",xls.sheet_names,key="v4c_team_import_sheet")
+        raw=pd.read_excel(uploaded,sheet_name=sheet,engine="openpyxl")
+    except Exception as exc:
+        st.error(f"Excel tidak dapat dibaca: {exc}")
+        return
+
+    if raw.empty:
+        st.warning("Sheet tidak memiliki data.")
+        return
+
+    raw=raw.dropna(how="all").copy()
+    if raw.empty:
+        st.warning("Tidak ada baris data.")
+        return
+
+    st.markdown("#### 1. Mapping Kolom Excel")
+    source_cols=[str(c) for c in raw.columns]
+    target_fields=[
+        ("name","Staff Name *"),
+        ("category","Category *"),
+        ("primary_role","Primary Role *"),
+        ("intern_start","Intern Start"),
+        ("intern_end","Intern End"),
+        ("active","Active"),
+    ]
+
+    norm={_normalize_import_header(c):c for c in source_cols}
+    aliases={
+        "name":["staffname","name","nama","staff"],
+        "category":["category","kategori","employmentcategory","type"],
+        "primary_role":["primaryrole","role","jabatan","position"],
+        "intern_start":["internstart","internstartdate","startintern"],
+        "intern_end":["internend","internenddate","endintern"],
+        "active":["active","isactive","statusactive"],
+    }
+
+    mapping={}
+    options=["— Not mapped —"]+source_cols
+    for target,label in target_fields:
+        guess="— Not mapped —"
+        for a in aliases[target]:
+            if a in norm:
+                guess=norm[a]
+                break
+        default=options.index(guess) if guess in options else 0
+        mapping[target]=st.selectbox(
+            label,
+            options,
+            index=default,
+            key=f"v4c_team_map_{target}",
+        )
+
+    required_missing=[
+        label for target,label in target_fields[:3]
+        if mapping[target]=="— Not mapped —"
+    ]
+    if required_missing:
+        st.warning("Field wajib belum dipetakan: "+", ".join(required_missing))
+        return
+
+    st.markdown("#### 2. Preview Hasil Mapping")
+    mapped=pd.DataFrame(index=raw.index)
+    for target,label in target_fields:
+        src_col=mapping[target]
+        mapped[label.replace(" *","")]=(
+            raw[src_col] if src_col!="— Not mapped —"
+            else None
+        )
+
+    st.dataframe(mapped.head(20),use_container_width=True,hide_index=True)
+    st.caption(f"{len(mapped)} baris siap divalidasi.")
+
+    # Validation + normalization happens before anything is written to DB.
+    categories=_team_categories()
+    roles=master_values("role","role")
+    role_lookup={clean(x).lower():x for x in roles}
+    cat_lookup={clean(x).lower():x for x in categories}
+
+    valid_rows=[]
+    errors=[]
+    existing_names=set(
+        clean(x).lower()
+        for x in db_df("SELECT name FROM staff")["name"].tolist()
+    )
+
+    for ix,row in raw.iterrows():
+        name=clean(row[mapping["name"]])
+        cat_raw=clean(row[mapping["category"]])
+        role_raw=clean(row[mapping["primary_role"]])
+
+        if not name:
+            errors.append(f"Baris Excel {ix+2}: Staff Name kosong.")
+            continue
+        if not cat_raw:
+            errors.append(f"Baris Excel {ix+2}: Category kosong.")
+            continue
+        if cat_raw.lower() not in cat_lookup:
+            errors.append(
+                f"Baris Excel {ix+2}: Category '{cat_raw}' tidak ada di Setup."
+            )
+            continue
+        if not role_raw:
+            errors.append(f"Baris Excel {ix+2}: Primary Role kosong.")
+            continue
+        if role_raw.lower() not in role_lookup:
+            errors.append(
+                f"Baris Excel {ix+2}: Primary Role '{role_raw}' tidak ada di Setup."
+            )
+            continue
+
+        category=cat_lookup[cat_raw.lower()]
+        role=role_lookup[role_raw.lower()]
+
+        start=None
+        end=None
+        if mapping["intern_start"]!="— Not mapped —":
+            start=to_iso_date(row[mapping["intern_start"]])
+        if mapping["intern_end"]!="— Not mapped —":
+            end=to_iso_date(row[mapping["intern_end"]])
+
+        if category=="Intern":
+            if not start or not end:
+                errors.append(
+                    f"Baris Excel {ix+2}: Intern wajib memiliki Intern Start dan Intern End."
+                )
+                continue
+            if end<start:
+                errors.append(
+                    f"Baris Excel {ix+2}: Intern End lebih awal dari Intern Start."
+                )
+                continue
+        else:
+            start=None
+            end=None
+
+        active=True
+        if mapping["active"]!="— Not mapped —":
+            v=row[mapping["active"]]
+            if pd.isna(v):
+                active=True
+            elif isinstance(v,bool):
+                active=v
+            else:
+                active=str(v).strip().lower() not in {
+                    "0","false","no","n","inactive","nonaktif","tidak"
+                }
+
+        duplicate_in_file=any(
+            clean(r["name"]).lower()==name.lower() for r in valid_rows
+        )
+        if name.lower() in existing_names or duplicate_in_file:
+            errors.append(
+                f"Baris Excel {ix+2}: Staff Name '{name}' sudah ada."
+            )
+            continue
+
+        valid_rows.append({
+            "name":name,
+            "category":category,
+            "primary_role":role,
+            "intern_start":start,
+            "intern_end":end,
+            "active":1 if active else 0,
+        })
+
+    if errors:
+        st.error(f"Ditemukan {len(errors)} masalah. Tidak ada data yang direkam.")
+        st.dataframe(
+            pd.DataFrame({"Validation Error":errors}),
+            use_container_width=True,
+            hide_index=True,
+        )
+        return
+
+    st.success(f"{len(valid_rows)} baris lolos validasi dan siap direkam.")
+
+    if st.button(
+        "Save Imported Team Data",
+        type="primary",
+        use_container_width=True,
+        key="v4c_team_import_save",
+    ):
+        conn=get_conn()
+        try:
+            for r in valid_rows:
+                conn.execute(
+                    """INSERT INTO staff
+                    (name,category,primary_role,intern_start,intern_end,active)
+                    VALUES (?,?,?,?,?,?)""",
+                    (
+                        r["name"],r["category"],r["primary_role"],
+                        r["intern_start"],r["intern_end"],r["active"]
+                    ),
+                )
+            conn.commit()
+            st.success(f"{len(valid_rows)} Team Member berhasil direkam ke database.")
+            st.rerun()
+        except sqlite3.IntegrityError as exc:
+            conn.rollback()
+            st.error(f"Import dibatalkan karena konflik database: {exc}")
+        finally:
+            conn.close()
+
+
 def input_team_page():
     st.markdown('<div class="app-title">Input Team</div>',unsafe_allow_html=True)
     st.markdown("Manage team members used throughout the Control Board.")
     st.caption("Active = muncul pada dropdown di modul lain. Inactive = tetap tersimpan di database, tetapi tidak muncul pada dropdown. Delete = menghapus permanen dari database.")
     df=db_df("SELECT id,name,category,primary_role,intern_start,intern_end,active FROM staff ORDER BY name")
     st.dataframe(df.drop(columns=["id"]),use_container_width=True,hide_index=True)
-    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    a,e,d,i=st.tabs(["＋ Add","✎ Edit","🗑 Delete","⇧ Import Excel"])
     with a: _add_team()
     with e: _edit_team(df)
     with d: _delete_team(df)
+    with i: _import_team_excel()
 
 
 def _project_duration(start,finish):
