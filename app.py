@@ -787,14 +787,23 @@ def seed_from_workbook():
 # HELPERS
 # ============================================================
 
+def _is_missing(v):
+    # Handles None, NaN, NaT and pandas.NA consistently.
+    try:
+        result = pd.isna(v)
+        return bool(result) if not hasattr(result, "__len__") else False
+    except Exception:
+        return False
+
+
 def clean(v):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
+    if _is_missing(v):
         return ""
     return str(v).strip()
 
 
 def numeric_or_none(v):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
+    if _is_missing(v):
         return None
     try:
         return float(v)
@@ -803,7 +812,7 @@ def numeric_or_none(v):
 
 
 def to_iso_date(v):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
+    if _is_missing(v):
         return None
     if isinstance(v, pd.Timestamp):
         return v.date().isoformat()
@@ -812,9 +821,25 @@ def to_iso_date(v):
     if isinstance(v, date):
         return v.isoformat()
     try:
-        return pd.to_datetime(v).date().isoformat()
+        parsed = pd.to_datetime(v, errors="coerce")
+        if _is_missing(parsed):
+            return None
+        return parsed.date().isoformat()
     except Exception:
         return None
+
+
+def safe_date(v, default=None):
+    """Return a real datetime.date or default; never return pandas NaT."""
+    if _is_missing(v):
+        return default
+    try:
+        parsed = pd.to_datetime(v, errors="coerce")
+        if _is_missing(parsed):
+            return default
+        return parsed.date()
+    except Exception:
+        return default
 
 
 def to_iso_time(v):
@@ -2226,7 +2251,7 @@ def _edit_team(df):
         st.markdown("#### Intern Period")
         d1,d2=st.columns(2)
         with d1:
-            sd=pd.to_datetime(row["intern_start"]).date() if row["intern_start"] else None
+            sd=safe_date(row["intern_start"])
             intern_start=st.date_input(
                 "Intern Start *",
                 value=sd,
@@ -2234,7 +2259,7 @@ def _edit_team(df):
                 key=f"v4_edit_intern_start_{rid}",
             )
         with d2:
-            ed=pd.to_datetime(row["intern_end"]).date() if row["intern_end"] else None
+            ed=safe_date(row["intern_end"])
             intern_end=st.date_input(
                 "Intern End *",
                 value=ed,
@@ -2391,8 +2416,8 @@ def _edit_project(df):
             ptypes=master_values("project_type","project_type")
             ptype=_select_or_empty("Project Type",ptypes,index=ptypes.index(row["project_type"]) if row["project_type"] in ptypes else 0)
         with c2:
-            start=pd.to_datetime(row["start_date"]).date() if row["start_date"] else date.today()
-            finish=pd.to_datetime(row["target_finish"]).date() if row["target_finish"] else start
+            start=safe_date(row["start_date"], date.today())
+            finish=safe_date(row["target_finish"], start)
             start=st.date_input("Start Date",value=start)
             finish=st.date_input("Target Finish",value=finish)
             sizes=master_values("project_size","project_size")
@@ -2592,8 +2617,8 @@ def _edit_work(df):
     ats=master_values("activity_type","activity_type"); pris=master_values("priority","priority"); sts=master_values("task_status","status")
     with st.form("v4_edit_work"):
         pid=st.selectbox("Project ID",projects["id"].tolist(),index=projects["id"].tolist().index(row["project_id"]))
-        sd=pd.to_datetime(row["start_date"]).date() if row["start_date"] else date.today()
-        ed=pd.to_datetime(row["end_date"]).date() if row["end_date"] else sd
+        sd=safe_date(row["start_date"], date.today())
+        ed=safe_date(row["end_date"], sd)
         start=st.date_input("Start Date",value=sd); end=st.date_input("End Date",value=ed)
         task=st.text_input("Deliverable / Task *",value=clean(row["task"]))
         at=_select_or_empty("Activity Type",ats,index=ats.index(row["activity_type"]) if row["activity_type"] in ats else 0)
@@ -2668,7 +2693,7 @@ def _edit_meeting(df):
     pids=["No Project"]+(projects["id"].tolist() if not projects.empty else [])
     types=master_values("meeting_type","meeting_type");locs=master_values("meeting_location","location")
     with st.form("v4_edit_meeting"):
-        d=pd.to_datetime(row["activity_date"]).date()
+        d=safe_date(row["activity_date"], date.today())
         d=st.date_input("Date",value=d)
         def parse_t(v,default):
             try:return datetime.strptime(str(v),"%H:%M").time()
@@ -2731,7 +2756,7 @@ def _edit_other(df):
     sdf=_staff_options();people=["No Specific Staff"]+(sdf["name"].tolist() if not sdf.empty else [])
     p0=row["related_staff"] or "No Specific Staff"
     with st.form("v4_edit_other"):
-        d=pd.to_datetime(row["activity_date"]).date()
+        d=safe_date(row["activity_date"], date.today())
         d=st.date_input("Date",value=d)
         activity=st.text_input("Other Activity *",value=clean(row["activity"]))
         person=st.selectbox("Related Staff",people,index=people.index(p0) if p0 in people else 0)
@@ -2859,8 +2884,8 @@ def input_freelance_mapping_page():
             with st.form("v4_edit_freelance_mapping"):
                 freelancer=st.selectbox("Freelance *",people,index=people.index(row["freelancer"]) if row["freelancer"] in people else 0)
                 project_id=st.selectbox("Project *",pids,index=pids.index(row["project_id"]) if row["project_id"] in pids else 0)
-                start=st.date_input("Assignment Start *",value=pd.to_datetime(row["start_date"]).date())
-                end=st.date_input("Assignment End *",value=pd.to_datetime(row["end_date"]).date())
+                start=st.date_input("Assignment Start *",value=safe_date(row["start_date"], date.today()))
+                end=st.date_input("Assignment End *",value=safe_date(row["end_date"], date.today()))
                 notes=st.text_area("Notes",value=clean(row["notes"]))
                 save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
             if save:
