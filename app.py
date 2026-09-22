@@ -611,11 +611,11 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             freelancer TEXT NOT NULL,
             project_id TEXT NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
+            start_date TEXT,
+            end_date TEXT,
+            mapping_status TEXT,
             notes TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(freelancer, project_id, start_date, end_date)
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         """
     )
@@ -3382,20 +3382,47 @@ def input_activities_page():
 
 
 
+def ensure_freelance_mapping_schema():
+    """Migrate legacy date-based mapping to status-based mapping without
+    deleting existing records."""
+    conn=get_conn()
+    try:
+        cols=[r[1] for r in conn.execute(
+            "PRAGMA table_info(freelance_project_mapping)"
+        ).fetchall()]
+        if "mapping_status" not in cols:
+            conn.execute(
+                "ALTER TABLE freelance_project_mapping ADD COLUMN mapping_status TEXT"
+            )
+            master=master_values("mapping_status","status")
+            default_status=master[0] if master else None
+            if default_status:
+                conn.execute(
+                    "UPDATE freelance_project_mapping SET mapping_status=? "
+                    "WHERE mapping_status IS NULL",
+                    (default_status,)
+                )
+            conn.commit()
+    finally:
+        conn.close()
+
+
 def freelance_mapping_df():
     return db_df("""
         SELECT m.id, m.freelancer, m.project_id,
                COALESCE(p.name,'') AS project_name,
-               m.start_date, m.end_date, m.notes
+               COALESCE(m.mapping_status,'') AS mapping_status
         FROM freelance_project_mapping m
         LEFT JOIN projects p ON p.id=m.project_id
-        ORDER BY m.freelancer, m.start_date, m.id
+        ORDER BY m.freelancer, m.id
     """)
 
 
+
 def input_freelance_mapping_page():
+    ensure_freelance_mapping_schema()
     st.markdown('<div class="app-title">Freelance Project Mapping</div>',unsafe_allow_html=True)
-    st.markdown("Map each freelance team member to one or more projects and define the assignment period.")
+    st.markdown("Map each freelance team member to one or more active projects.")
 
     freelancers_df=db_df("""
         SELECT name, primary_role
@@ -3409,7 +3436,7 @@ def input_freelance_mapping_page():
     if freelancers_df.empty:
         st.info("Belum ada Freelance aktif. Tambahkan Category = Freelance di Input Team terlebih dahulu.")
     if projects.empty:
-        st.info("Belum ada Project. Tambahkan Project di Input Project terlebih dahulu.")
+        st.info("Belum ada Project Active. Tambahkan atau ubah Project di Input Project terlebih dahulu.")
 
     st.markdown("### Current Mapping")
     st.dataframe(
@@ -3420,8 +3447,10 @@ def input_freelance_mapping_page():
 
     add_tab, edit_tab, delete_tab = st.tabs(["＋ Add Mapping","✎ Edit Mapping","🗑 Delete Mapping"])
 
+    statuses=master_values("mapping_status","status")
+
     with add_tab:
-        if not freelancers_df.empty and not projects.empty:
+        if not freelancers_df.empty and not projects.empty and statuses:
             with st.form("v4_add_freelance_mapping",clear_on_submit=True):
                 people=freelancers_df["name"].tolist()
                 pids=projects["id"].tolist()
@@ -3430,73 +3459,96 @@ def input_freelance_mapping_page():
                     freelancer=st.selectbox("Freelance *",people)
                     project_id=st.selectbox("Project *",pids)
                 with c2:
-                    start=st.date_input("Assignment Start *")
-                    end=st.date_input("Assignment End *")
-                notes=st.text_area("Notes")
+                    mapping_status=_select_or_empty("Mapping Status *",statuses)
                 save=st.form_submit_button("Save Mapping",type="primary",use_container_width=True)
 
             if save:
-                if end<start:
-                    st.error("Assignment End tidak boleh lebih awal dari Assignment Start.")
+                if not mapping_status:
+                    st.error("Mapping Status wajib diisi.")
                 else:
                     conn=get_conn()
                     try:
                         conn.execute("""INSERT INTO freelance_project_mapping
-                            (freelancer,project_id,start_date,end_date,notes)
-                            VALUES (?,?,?,?,?)""",
-                            (freelancer,project_id,start.isoformat(),end.isoformat(),notes))
+                            (freelancer,project_id,mapping_status)
+                            VALUES (?,?,?)""",
+                            (freelancer,project_id,mapping_status))
                         conn.commit()
                         st.success("Freelance project mapping berhasil ditambahkan.")
                         st.rerun()
                     except sqlite3.IntegrityError:
-                        st.error("Mapping yang sama sudah ada.")
+                        st.error("Freelance dan Project tersebut sudah memiliki mapping.")
                     finally:
                         conn.close()
+        elif not statuses:
+            st.warning("Mapping Status belum tersedia di Setup.")
 
     with edit_tab:
-        if not df.empty and not freelancers_df.empty and not projects.empty:
-            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.start_date} – {r.end_date}" for _,r in df.iterrows()}
-            rid=st.selectbox("Select Mapping",list(labels),format_func=lambda x:labels[x],key="v4_fm_edit_id")
-            row=df[df.id==rid].iloc[0]
-            people=freelancers_df["name"].tolist()
-            pids=projects["id"].tolist()
-            with st.form("v4_edit_freelance_mapping"):
-                freelancer=st.selectbox("Freelance *",people,index=people.index(row["freelancer"]) if row["freelancer"] in people else 0)
-                project_id=st.selectbox("Project *",pids,index=pids.index(row["project_id"]) if row["project_id"] in pids else 0)
-                start=st.date_input("Assignment Start *",value=safe_date(row["start_date"], date.today()))
-                end=st.date_input("Assignment End *",value=safe_date(row["end_date"], date.today()))
-                notes=st.text_area("Notes",value=clean(row["notes"]))
-                save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
-            if save:
-                if end<start:
-                    st.error("Assignment End tidak boleh lebih awal dari Assignment Start.")
-                else:
-                    conn=get_conn()
-                    try:
-                        conn.execute("""UPDATE freelance_project_mapping
-                            SET freelancer=?,project_id=?,start_date=?,end_date=?,notes=?
-                            WHERE id=?""",
-                            (freelancer,project_id,start.isoformat(),end.isoformat(),notes,int(rid)))
-                        conn.commit()
-                        st.success("Mapping berhasil diperbarui.")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Mapping yang sama sudah ada.")
-                    finally:
-                        conn.close()
+        if not df.empty and not freelancers_df.empty and not projects.empty and statuses:
+            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.project_name}" for _,r in df.iterrows()}
+            rid=st.selectbox(
+                "Select Mapping",[None]+list(labels),index=0,
+                format_func=lambda x:"— Select Mapping —" if x is None else labels[x],
+                key="v5c_fm_edit_id"
+            )
+            if rid is None:
+                st.info("Pilih mapping terlebih dahulu.")
+            else:
+                row=df[df.id==rid].iloc[0]
+                people=freelancers_df["name"].tolist()
+                pids=projects["id"].tolist()
+                with st.form("v5c_edit_freelance_mapping"):
+                    freelancer=st.selectbox(
+                        "Freelance *",people,
+                        index=people.index(row["freelancer"]) if row["freelancer"] in people else 0
+                    )
+                    project_id=st.selectbox(
+                        "Project *",pids,
+                        index=pids.index(row["project_id"]) if row["project_id"] in pids else 0
+                    )
+                    mapping_status=_select_or_empty(
+                        "Mapping Status *",statuses,
+                        index=statuses.index(row["mapping_status"])
+                        if row["mapping_status"] in statuses else 0
+                    )
+                    save=st.form_submit_button("Save Changes",type="primary",use_container_width=True)
+                if save:
+                    if not mapping_status:
+                        st.error("Mapping Status wajib diisi.")
+                    else:
+                        conn=get_conn()
+                        try:
+                            conn.execute("""UPDATE freelance_project_mapping
+                                SET freelancer=?,project_id=?,mapping_status=?
+                                WHERE id=?""",
+                                (freelancer,project_id,mapping_status,int(rid)))
+                            conn.commit()
+                            st.success("Mapping berhasil diperbarui.")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("Freelance dan Project tersebut sudah memiliki mapping.")
+                        finally:
+                            conn.close()
 
     with delete_tab:
         if not df.empty:
-            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.start_date} – {r.end_date}" for _,r in df.iterrows()}
-            rid=st.selectbox("Select Mapping to Delete",list(labels),format_func=lambda x:labels[x],key="v4_fm_del_id")
-            confirm=st.checkbox("Confirm deletion",key="v4_fm_del_confirm")
-            if st.button("Delete Permanently",key="v4_fm_delete",type="secondary",disabled=not confirm,use_container_width=True):
-                conn=get_conn()
-                conn.execute("DELETE FROM freelance_project_mapping WHERE id=?",(int(rid),))
-                conn.commit()
-                conn.close()
-                st.success("Mapping berhasil dihapus.")
-                st.rerun()
+            labels={int(r.id):f"{r.freelancer} • {r.project_id} • {r.project_name}" for _,r in df.iterrows()}
+            rid=st.selectbox(
+                "Select Mapping to Delete",[None]+list(labels),index=0,
+                format_func=lambda x:"— Select Mapping to Delete —" if x is None else labels[x],
+                key="v5c_fm_del_id"
+            )
+            if rid is not None:
+                confirm=st.checkbox("Confirm deletion",value=False,key="v5c_fm_del_confirm")
+                if st.button(
+                    "Delete Permanently",key="v5c_fm_delete",type="secondary",
+                    disabled=not confirm,use_container_width=True
+                ):
+                    conn=get_conn()
+                    conn.execute("DELETE FROM freelance_project_mapping WHERE id=?",(int(rid),))
+                    conn.commit()
+                    conn.close()
+                    st.success("Mapping berhasil dihapus.")
+                    st.rerun()
 
 
 def input_data_page(submodule):
@@ -3601,6 +3653,7 @@ if st.sidebar.button(
 init_db()
 init_master_database()
 ensure_v4_input_schema()
+ensure_freelance_mapping_schema()
 
 module = st.session_state.v3a_module
 
