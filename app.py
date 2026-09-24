@@ -1188,6 +1188,38 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# V8f compact PDF export control — top-right, no extra dashboard row.
+st.markdown(
+    """
+    <style>
+    /* The first horizontal row after the dashboard anchor is title + Export PDF.
+       Keep it compact so V8e vertical spacing remains essentially unchanged. */
+    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor)
+      > div[data-testid="stElementContainer"]
+      + div[data-testid="stElementContainer"]
+      div[data-testid="stHorizontalBlock"] {
+        align-items:flex-end !important;
+    }
+
+    /* Top-right export button: quiet secondary action, theme adaptive. */
+    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor)
+      div[data-testid="stHorizontalBlock"]:first-of-type
+      .stPopover > button {
+        min-height:36px !important;
+        height:36px !important;
+        border-radius:8px !important;
+        font-size:.78rem !important;
+        font-weight:650 !important;
+        justify-content:center !important;
+        white-space:nowrap !important;
+        box-shadow:none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ============================================================
 # DATABASE
 # ============================================================
@@ -2511,6 +2543,394 @@ def generate_date_detail_pdf(detail_date, work, meetings, others, visible_activi
     return bio.getvalue()
 
 
+
+@st.cache_data(ttl=60, show_spinner=False, max_entries=20)
+def generate_schedule_report_pdf(
+    report_start,
+    report_end,
+    work,
+    meetings,
+    others,
+    visible_activities,
+    period_label,
+    project_scope_label,
+    activity_scope_label,
+):
+    """Generate a complete Weekly/Monthly schedule report.
+
+    Unlike the dashboard cells, this PDF has no 3-project / 3-activity
+    display limit. Every matching activity is listed under its activity date.
+    """
+    if not REPORTLAB_AVAILABLE:
+        return None
+
+    regular_font,bold_font=_pdf_font_names()
+    bio=BytesIO()
+
+    doc=SimpleDocTemplate(
+        bio,
+        pagesize=A4,
+        rightMargin=14*mm,
+        leftMargin=14*mm,
+        topMargin=13*mm,
+        bottomMargin=14*mm,
+        title=f"ARAYASTD {period_label} Schedule",
+        author="ARAYASTD Studio Control Board",
+    )
+
+    styles=getSampleStyleSheet()
+
+    title_style=ParagraphStyle(
+        "ScheduleReportTitle",
+        parent=styles["Title"],
+        fontName=bold_font,
+        fontSize=17,
+        leading=21,
+        textColor=colors.HexColor("#172B4D"),
+        spaceAfter=2*mm,
+    )
+    subtitle_style=ParagraphStyle(
+        "ScheduleReportSubtitle",
+        parent=styles["Normal"],
+        fontName=regular_font,
+        fontSize=8.8,
+        leading=12,
+        textColor=colors.HexColor("#667085"),
+        spaceAfter=4*mm,
+    )
+    scope_style=ParagraphStyle(
+        "ScheduleReportScope",
+        parent=styles["Normal"],
+        fontName=regular_font,
+        fontSize=7.8,
+        leading=10.5,
+        textColor=colors.HexColor("#475467"),
+    )
+    date_style=ParagraphStyle(
+        "ScheduleReportDate",
+        parent=styles["Heading2"],
+        fontName=bold_font,
+        fontSize=11.5,
+        leading=14,
+        textColor=colors.HexColor("#172B4D"),
+        spaceAfter=0,
+    )
+    section_style=ParagraphStyle(
+        "ScheduleReportSection",
+        parent=styles["Heading3"],
+        fontName=bold_font,
+        fontSize=9.5,
+        leading=12,
+        textColor=colors.HexColor("#172B4D"),
+        spaceAfter=1.5*mm,
+    )
+    project_style=ParagraphStyle(
+        "ScheduleReportProject",
+        parent=styles["BodyText"],
+        fontName=bold_font,
+        fontSize=8.4,
+        leading=11,
+        textColor=colors.HexColor("#172B4D"),
+        spaceBefore=1.2*mm,
+        spaceAfter=.8*mm,
+    )
+    item_style=ParagraphStyle(
+        "ScheduleReportItem",
+        parent=styles["BodyText"],
+        fontName=regular_font,
+        fontSize=8.0,
+        leading=11,
+        textColor=colors.HexColor("#1F2937"),
+        leftIndent=2.5*mm,
+        spaceAfter=.8*mm,
+    )
+    meta_style=ParagraphStyle(
+        "ScheduleReportMeta",
+        parent=item_style,
+        fontSize=7.1,
+        leading=9.5,
+        textColor=colors.HexColor("#667085"),
+        leftIndent=7*mm,
+        spaceAfter=.5*mm,
+    )
+    empty_style=ParagraphStyle(
+        "ScheduleReportEmpty",
+        parent=item_style,
+        textColor=colors.HexColor("#98A2B3"),
+    )
+
+    story=[
+        Paragraph("ARAYASTD - Schedule Report",title_style),
+        Paragraph(
+            f"{_pdf_safe(period_label)} | "
+            f"{report_start.strftime('%d %b %Y')} - {report_end.strftime('%d %b %Y')}",
+            subtitle_style,
+        ),
+    ]
+
+    scope_table=Table(
+        [
+            [
+                Paragraph("<b>Projects</b>",scope_style),
+                Paragraph(_pdf_safe(project_scope_label),scope_style),
+            ],
+            [
+                Paragraph("<b>Activities</b>",scope_style),
+                Paragraph(_pdf_safe(activity_scope_label),scope_style),
+            ],
+        ],
+        colWidths=[28*mm,152*mm],
+        hAlign="LEFT",
+    )
+    scope_table.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(0,-1),colors.HexColor("#F2F4F7")),
+        ("BACKGROUND",(1,0),(1,-1),colors.HexColor("#F8FAFC")),
+        ("BOX",(0,0),(-1,-1),.5,colors.HexColor("#D0D5DD")),
+        ("INNERGRID",(0,0),(-1,-1),.35,colors.HexColor("#EAECF0")),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
+        ("LEFTPADDING",(0,0),(-1,-1),2.3*mm),
+        ("RIGHTPADDING",(0,0),(-1,-1),2.3*mm),
+        ("TOPPADDING",(0,0),(-1,-1),1.6*mm),
+        ("BOTTOMPADDING",(0,0),(-1,-1),1.6*mm),
+    ]))
+    story.extend([scope_table,Spacer(1,3.5*mm)])
+
+    w_count=len(work) if "work" in visible_activities else 0
+    m_count=len(meetings) if "meeting" in visible_activities else 0
+    o_count=len(others) if "other" in visible_activities else 0
+    submission_count=(
+        int((work["activity_type"].fillna("").str.lower()=="submission").sum())
+        if "work" in visible_activities and not work.empty else 0
+    )
+
+    summary_data=[
+        [
+            Paragraph("<b>WORK</b>",scope_style),
+            Paragraph("<b>MEETINGS</b>",scope_style),
+            Paragraph("<b>SUBMISSIONS</b>",scope_style),
+            Paragraph("<b>OTHER</b>",scope_style),
+        ],
+        [
+            Paragraph(str(w_count),date_style),
+            Paragraph(str(m_count),date_style),
+            Paragraph(str(submission_count),date_style),
+            Paragraph(str(o_count),date_style),
+        ],
+    ]
+    summary=Table(summary_data,colWidths=[45*mm]*4,hAlign="LEFT")
+    summary.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(0,-1),colors.HexColor("#EAF4FF")),
+        ("BACKGROUND",(1,0),(1,-1),colors.HexColor("#FFF9DF")),
+        ("BACKGROUND",(2,0),(2,-1),colors.HexColor("#FFF0F1")),
+        ("BACKGROUND",(3,0),(3,-1),colors.HexColor("#F4ECFF")),
+        ("BOX",(0,0),(-1,-1),.5,colors.HexColor("#D0D5DD")),
+        ("INNERGRID",(0,0),(-1,-1),.35,colors.HexColor("#EAECF0")),
+        ("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("TOPPADDING",(0,0),(-1,-1),1.8*mm),
+        ("BOTTOMPADDING",(0,0),(-1,-1),1.8*mm),
+    ]))
+    story.extend([summary,Spacer(1,5*mm)])
+
+    date_cursor=report_start
+    rendered_any=False
+
+    while date_cursor<=report_end:
+        iso=date_cursor.isoformat()
+        wrows=(
+            work[work["end_date"]==iso].copy()
+            if "work" in visible_activities and not work.empty
+            else work.iloc[0:0]
+        )
+        mrows=(
+            meetings[meetings["activity_date"]==iso].copy()
+            if "meeting" in visible_activities and not meetings.empty
+            else meetings.iloc[0:0]
+        )
+        orows=(
+            others[others["activity_date"]==iso].copy()
+            if "other" in visible_activities and not others.empty
+            else others.iloc[0:0]
+        )
+
+        if wrows.empty and mrows.empty and orows.empty:
+            date_cursor+=timedelta(days=1)
+            continue
+
+        rendered_any=True
+        day_label=date_cursor.strftime("%A, %d %B %Y")
+        date_box=Table(
+            [[Paragraph(_pdf_safe(day_label),date_style)]],
+            colWidths=[180*mm],
+            hAlign="LEFT",
+        )
+        date_box.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#EEF2F6")),
+            ("BOX",(0,0),(-1,-1),.55,colors.HexColor("#D0D5DD")),
+            ("LEFTPADDING",(0,0),(-1,-1),3*mm),
+            ("RIGHTPADDING",(0,0),(-1,-1),3*mm),
+            ("TOPPADDING",(0,0),(-1,-1),2.2*mm),
+            ("BOTTOMPADDING",(0,0),(-1,-1),2.2*mm),
+        ]))
+        story.extend([date_box,Spacer(1,2.5*mm)])
+
+        if "work" in visible_activities and not wrows.empty:
+            story.append(Paragraph(f"WORK ({len(wrows)})",section_style))
+            groups={}
+            for _,row in wrows.iterrows():
+                groups.setdefault(clean(row.get("project_id")),[]).append(row)
+
+            for pid,rows in sorted(groups.items(),key=lambda x:(x[0]=="",x[0])):
+                pname=clean(rows[0].get("project_name"))
+                project_label=(
+                    f"{_pdf_safe(pid)} | {_pdf_safe(pname)}"
+                    if pid or pname else "No Project"
+                )
+                story.append(Paragraph(project_label,project_style))
+
+                rows=sorted(
+                    rows,
+                    key=lambda r:(
+                        priority_rank(r.get("priority")),
+                        clean(r.get("task")).lower(),
+                        int(r.get("id") or 0),
+                    ),
+                )
+                for row in rows:
+                    task=_pdf_safe(row.get("task"))
+                    pic=_pdf_safe(row.get("pic"))
+                    story.append(
+                        Paragraph(
+                            f"- {task}"
+                            + (f" ({pic.upper()})" if pic else ""),
+                            item_style,
+                        )
+                    )
+                    meta=[]
+                    start=_pdf_safe(row.get("start_date"))
+                    activity_type=_pdf_safe(row.get("activity_type"))
+                    priority=_pdf_safe(row.get("priority"))
+                    status=_pdf_safe(row.get("status"))
+                    if start: meta.append(f"Start: {start}")
+                    if activity_type: meta.append(f"Type: {activity_type}")
+                    if priority: meta.append(f"Priority: {priority}")
+                    if status: meta.append(f"Status: {status}")
+                    if meta:
+                        story.append(Paragraph(" | ".join(meta),meta_style))
+            story.append(Spacer(1,2.5*mm))
+
+        if "meeting" in visible_activities and not mrows.empty:
+            story.append(Paragraph(f"MEETINGS ({len(mrows)})",section_style))
+            groups={}
+            for _,row in mrows.iterrows():
+                groups.setdefault(clean(row.get("project_id")),[]).append(row)
+
+            for pid,rows in sorted(groups.items(),key=lambda x:(x[0]=="",x[0])):
+                pname=clean(rows[0].get("project_name"))
+                if pid or pname:
+                    story.append(
+                        Paragraph(
+                            f"{_pdf_safe(pid)} | {_pdf_safe(pname)}",
+                            project_style,
+                        )
+                    )
+
+                rows=sorted(
+                    rows,
+                    key=lambda r:(
+                        clean(r.get("start_time")),
+                        clean(r.get("meeting_type")).lower(),
+                        int(r.get("id") or 0),
+                    ),
+                )
+
+                for row in rows:
+                    meeting_type=_pdf_safe(row.get("meeting_type"))
+                    agenda=_pdf_safe(row.get("agenda_notes"))
+                    meeting_title=meeting_type + (f" - {agenda}" if agenda else "")
+                    story.append(Paragraph(f"- {meeting_title}",item_style))
+
+                    attendees=[
+                        _pdf_safe(row.get("attendee_1")),
+                        _pdf_safe(row.get("attendee_2")),
+                        _pdf_safe(row.get("attendee_3")),
+                        _pdf_safe(row.get("attendee_4")),
+                    ]
+                    attendees=", ".join([a.upper() for a in attendees if a])
+                    meta=[]
+                    start=_pdf_safe(row.get("start_time"))
+                    end=_pdf_safe(row.get("end_time"))
+                    location=_pdf_safe(row.get("location"))
+                    if attendees: meta.append(f"PIC: {attendees}")
+                    if start or end: meta.append(f"Time: {start} - {end}")
+                    if location: meta.append(f"Location: {location}")
+                    if meta:
+                        story.append(Paragraph(" | ".join(meta),meta_style))
+            story.append(Spacer(1,2.5*mm))
+
+        if "other" in visible_activities and not orows.empty:
+            story.append(Paragraph(f"OTHER ACTIVITIES ({len(orows)})",section_style))
+            rows=sorted(
+                [row for _,row in orows.iterrows()],
+                key=lambda r:(
+                    clean(r.get("activity")).lower(),
+                    clean(r.get("related_staff")).lower(),
+                    int(r.get("id") or 0),
+                ),
+            )
+            for row in rows:
+                activity=_pdf_safe(row.get("activity"))
+                story.append(Paragraph(f"- {activity}",item_style))
+                meta=[]
+                staff=_pdf_safe(row.get("related_staff"))
+                notes=_pdf_safe(row.get("notes"))
+                if staff: meta.append(f"Related Staff: {staff.upper()}")
+                if notes: meta.append(f"Notes: {notes}")
+                if meta:
+                    story.append(Paragraph(" | ".join(meta),meta_style))
+            story.append(Spacer(1,2.5*mm))
+
+        story.append(Spacer(1,3.5*mm))
+        date_cursor+=timedelta(days=1)
+
+    if not rendered_any:
+        story.append(
+            Paragraph(
+                "No activities found for the selected report filters.",
+                empty_style,
+            )
+        )
+
+    story.append(
+        Spacer(1,4*mm)
+    )
+    story.append(
+        Paragraph(
+            "Note: Other Activities are non-project activities and therefore "
+            "remain independent of the project filter.",
+            scope_style,
+        )
+    )
+
+    def _page_footer(canvas,doc_obj):
+        canvas.saveState()
+        canvas.setFont(regular_font,7)
+        canvas.setFillColor(colors.HexColor("#98A2B3"))
+        canvas.drawString(14*mm,8*mm,"ARAYASTD Studio Control Board")
+        canvas.drawRightString(
+            A4[0]-14*mm,8*mm,f"Page {doc_obj.page}"
+        )
+        canvas.restoreState()
+
+    doc.build(
+        story,
+        onFirstPage=_page_footer,
+        onLaterPages=_page_footer,
+    )
+    bio.seek(0)
+    return bio.getvalue()
+
+
 @st.dialog("Activity Detail", width="large")
 def show_date_detail(detail_date, work, meetings, others, visible_activities):
     """Full-detail modal for one date. No dashboard display limits.
@@ -2854,12 +3274,17 @@ def weekly_dashboard():
     header = st.container()
     with header:
         st.markdown('<div id="weekly-dashboard-anchor"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
-            'Other remains independent of project filter</div>',
-            unsafe_allow_html=True,
-        )
+
+        title_left,title_right=st.columns([8.7,1.3],gap="small",vertical_alignment="bottom")
+        with title_left:
+            st.markdown('<div class="app-title">Weekly Schedule Dashboard</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="app-subtitle">Leadership view • Work & Meeting follow project filter • '
+                'Other remains independent of project filter</div>',
+                unsafe_allow_html=True,
+            )
+        with title_right:
+            export_pdf_slot=st.empty()
 
         c1, c2, c3, c4, c5 = st.columns([1.05, .82, 1.55, 1.15, 1.15], gap="small")
         with c1:
@@ -2977,6 +3402,193 @@ def weekly_dashboard():
             )
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
+
+        # Render the report control in the reserved top-right title slot.
+        # This avoids adding any height between KPI cards and the weekly schedule.
+        with export_pdf_slot.container():
+            with st.popover("Export PDF",use_container_width=True):
+                        st.markdown("##### Schedule Report")
+                        st.caption(
+                            "PDF memuat seluruh rincian aktivitas per tanggal. "
+                            "Batas 3 item pada tampilan dashboard tidak berlaku."
+                        )
+
+                        export_period=st.selectbox(
+                            "Period",
+                            ["Weekly","Monthly"],
+                            key="dash_pdf_period",
+                        )
+
+                        report_start=month_start
+                        report_end=month_end
+                        period_label=f"Monthly - {month_names[selected_month_no-1]} {selected_year}"
+
+                        if export_period=="Weekly":
+                            week_labels=[
+                                f"Week {i+1} | {w[0].strftime('%d %b')} - {w[1].strftime('%d %b %Y')}"
+                                for i,w in enumerate(weeks)
+                            ]
+
+                            if selected_week!="All":
+                                current_week_idx=max(0,int(selected_week.split()[1])-1)
+                            elif (
+                                selected_year==dashboard_today.year
+                                and selected_month_no==dashboard_today.month
+                            ):
+                                current_week_idx=next(
+                                    (
+                                        i for i,(ws,we) in enumerate(weeks)
+                                        if ws<=dashboard_today<=we
+                                    ),
+                                    0,
+                                )
+                            else:
+                                current_week_idx=0
+
+                            export_week_label=st.selectbox(
+                                "Week",
+                                week_labels,
+                                index=min(current_week_idx,len(week_labels)-1),
+                                key="dash_pdf_week",
+                            )
+                            export_week_idx=week_labels.index(export_week_label)
+                            report_start,report_end=weeks[export_week_idx]
+                            period_label=(
+                                f"Weekly - Week {export_week_idx+1} "
+                                f"({report_start.strftime('%d %b')} - "
+                                f"{report_end.strftime('%d %b %Y')})"
+                            )
+
+                        project_scope=st.selectbox(
+                            "Projects",
+                            ["Current Dashboard","All Projects","Choose Projects"],
+                            key="dash_pdf_project_scope",
+                        )
+
+                        export_project_ids=None
+                        project_scope_label="All Projects"
+
+                        if project_scope=="Current Dashboard":
+                            if project_all or not selected_projects:
+                                export_project_ids=None
+                                project_scope_label="All Projects"
+                            else:
+                                export_project_ids=list(selected_projects)
+                                project_scope_label=", ".join(export_project_ids)
+
+                        elif project_scope=="Choose Projects":
+                            project_ids=projects["id"].tolist() if not projects.empty else []
+                            chosen_export_projects=st.multiselect(
+                                "Select Projects",
+                                project_ids,
+                                key="dash_pdf_projects",
+                                format_func=lambda x:(
+                                    f"{x} | {projects.loc[projects['id'].eq(x),'name'].iloc[0]}"
+                                    if not projects.loc[projects['id'].eq(x)].empty
+                                    else x
+                                ),
+                            )
+                            export_project_ids=list(chosen_export_projects)
+                            project_scope_label=(
+                                ", ".join(export_project_ids)
+                                if export_project_ids else "No project selected"
+                            )
+
+                        activity_scope=st.selectbox(
+                            "Activities",
+                            ["Current Dashboard","All Activities","Choose Activities"],
+                            key="dash_pdf_activity_scope",
+                        )
+
+                        export_activity_set={"work","meeting","other"}
+                        activity_scope_label="All Activities"
+
+                        if activity_scope=="Current Dashboard":
+                            export_activity_set=set(visible_activities)
+                            activity_scope_label=", ".join(
+                                x.title() for x in ["work","meeting","other"]
+                                if x in export_activity_set
+                            ) or "No activity selected"
+
+                        elif activity_scope=="Choose Activities":
+                            chosen_export_activities=st.multiselect(
+                                "Select Activities",
+                                ["Work","Meeting","Other"],
+                                key="dash_pdf_activities",
+                            )
+                            export_activity_set={
+                                x.lower() for x in chosen_export_activities
+                            }
+                            activity_scope_label=(
+                                ", ".join(chosen_export_activities)
+                                if chosen_export_activities else "No activity selected"
+                            )
+
+                        export_valid=True
+                        if project_scope=="Choose Projects" and not export_project_ids:
+                            export_valid=False
+                            st.caption("Select at least one project.")
+                        if activity_scope=="Choose Activities" and not export_activity_set:
+                            export_valid=False
+                            st.caption("Select at least one activity.")
+
+                        if REPORTLAB_AVAILABLE and export_valid:
+                            report_work,report_meetings,report_others=load_activities(
+                                report_start,report_end,"All Projects"
+                            )
+
+                            if export_project_ids is not None:
+                                report_work=report_work[
+                                    report_work["project_id"].isin(export_project_ids)
+                                ].copy()
+                                report_meetings=report_meetings[
+                                    report_meetings["project_id"].isin(export_project_ids)
+                                ].copy()
+                                # Other remains independent of project filtering.
+
+                            if "work" not in export_activity_set:
+                                report_work=report_work.iloc[0:0]
+                            if "meeting" not in export_activity_set:
+                                report_meetings=report_meetings.iloc[0:0]
+                            if "other" not in export_activity_set:
+                                report_others=report_others.iloc[0:0]
+
+                            report_pdf=generate_schedule_report_pdf(
+                                report_start,
+                                report_end,
+                                report_work,
+                                report_meetings,
+                                report_others,
+                                export_activity_set,
+                                period_label,
+                                project_scope_label,
+                                activity_scope_label,
+                            )
+
+                            scope_slug=(
+                                "AllProjects"
+                                if export_project_ids is None
+                                else "SelectedProjects"
+                            )
+                            period_slug=(
+                                f"Week{export_week_idx+1}"
+                                if export_period=="Weekly"
+                                else f"{selected_year}-{selected_month_no:02d}"
+                            )
+                            st.download_button(
+                                "Download PDF",
+                                data=report_pdf,
+                                file_name=(
+                                    f"ARAYASTD_Schedule_{period_slug}_{scope_slug}.pdf"
+                                ),
+                                mime="application/pdf",
+                                key="dash_pdf_download",
+                                use_container_width=True,
+                            )
+                        elif not REPORTLAB_AVAILABLE:
+                            st.caption(
+                                "PDF generator belum tersedia. Pastikan reportlab terpasang."
+                            )
 
         if detail_date is not None:
             show_date_detail(
