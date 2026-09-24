@@ -63,24 +63,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# V8c Fix 2 — read Streamlit's active viewer theme directly.
-# New Streamlit versions expose this through st.context.theme.type.
-try:
-    ARAYA_THEME = str(st.context.theme.type).lower()
-except Exception:
-    ARAYA_THEME = "light"
-
-ARAYA_DARK = ARAYA_THEME == "dark"
-
-ARAYA_TEXT = "#F7F8FA" if ARAYA_DARK else "#172B4D"
-ARAYA_TEXT_STRONG = "#FFFFFF" if ARAYA_DARK else "#111111"
-ARAYA_MUTED = "#B8C0CC" if ARAYA_DARK else "#667085"
-ARAYA_MUTED_2 = "#929AA7" if ARAYA_DARK else "#98A2B3"
-ARAYA_INPUT_BG = "#171B22" if ARAYA_DARK else "#F5F8FC"
-ARAYA_INPUT_HOVER = "#20252E" if ARAYA_DARK else "#F0F5FA"
-ARAYA_BORDER = "#454B57" if ARAYA_DARK else "#E2E8F0"
-ARAYA_SIDEBAR_TEXT = "#F7F8FA" if ARAYA_DARK else "#172B4D"
-
 # Persistent database mode:
 # - DATABASE_URL configured -> PostgreSQL/Supabase, persistent across redeploys.
 # - no DATABASE_URL -> local SQLite fallback (development only).
@@ -683,140 +665,165 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Final theme-aware overrides. These are intentionally rendered AFTER all
-# legacy/custom styles so they win the cascade in both Light and Dark modes.
+
+# V8d — Pure CSS adaptive theme.
+# It follows Streamlit's native CSS variables, so Light/Dark changes apply
+# immediately in the browser without waiting for a Python rerun.
 st.markdown(
-    f"""
+    """
     <style>
-    /* ---------- App shell / custom typography ---------- */
-    .app-title {{
-        color:{ARAYA_TEXT_STRONG} !important;
-    }}
-    .app-subtitle {{
-        color:{ARAYA_MUTED} !important;
-        opacity:1 !important;
-    }}
+    /* App shell */
+    .app-title,
+    .v3-brand-name,
+    .v3-module-heading,
+    .araya-home-title {
+        color: var(--text-color, inherit) !important;
+    }
 
-    /* ---------- Sidebar ---------- */
-    section[data-testid="stSidebar"] .v3-brand-name,
-    section[data-testid="stSidebar"] .v3-module-heading {{
-        color:{ARAYA_SIDEBAR_TEXT} !important;
-    }}
-    section[data-testid="stSidebar"] .v3-brand-sub,
-    section[data-testid="stSidebar"] .v3-nav-label {{
-        color:{ARAYA_MUTED} !important;
-        opacity:1 !important;
-    }}
-    section[data-testid="stSidebar"] .v3-brand {{
-        border-bottom-color:{ARAYA_BORDER} !important;
-    }}
-    section[data-testid="stSidebar"] .araya-logo-mask {{
-        background-color:{ARAYA_SIDEBAR_TEXT} !important;
-    }}
-    section[data-testid="stSidebar"] .stButton > button {{
-        color:{ARAYA_SIDEBAR_TEXT} !important;
-        background:transparent !important;
-        border-color:{ARAYA_BORDER} !important;
-    }}
+    .app-subtitle,
+    .v3-brand-sub,
+    .v3-nav-label {
+        color: var(--text-color, inherit) !important;
+        opacity: .66 !important;
+    }
+
+    .v3-brand {
+        border-bottom-color:
+            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            !important;
+    }
+
+    /* Araya logo/vector follows foreground color automatically */
+    .araya-logo-mask,
+    .v3-brand-mark .araya-logo-mask,
+    .araya-home .araya-logo-mask {
+        background-color: var(--text-color, #111111) !important;
+        transition: background-color .12s ease;
+    }
+
+    .araya-home-rule {
+        background: var(--text-color, #111111) !important;
+    }
+
+    /* Sidebar navigation */
+    section[data-testid="stSidebar"] .stButton > button,
     section[data-testid="stSidebar"] .stButton > button p,
-    section[data-testid="stSidebar"] .stButton > button span {{
-        color:{ARAYA_SIDEBAR_TEXT} !important;
-    }}
-    section[data-testid="stSidebar"] .stButton > button:hover {{
-        background:{ARAYA_INPUT_HOVER} !important;
-        border-color:{ARAYA_MUTED_2} !important;
-    }}
+    section[data-testid="stSidebar"] .stButton > button span {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+    }
 
-    /* ---------- Beranda ---------- */
-    .araya-home-title {{
-        color:{ARAYA_TEXT_STRONG} !important;
-    }}
-    .araya-home-rule {{
-        background:{ARAYA_TEXT_STRONG} !important;
-    }}
-    .araya-home .araya-logo-mask {{
-        background-color:{ARAYA_TEXT_STRONG} !important;
-    }}
+    section[data-testid="stSidebar"] .stButton > button {
+        background: transparent !important;
+        border-color:
+            color-mix(in srgb, var(--text-color, #667085) 28%, transparent)
+            !important;
+    }
 
-    /* ---------- Standard Streamlit form fields ---------- */
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background:
+            color-mix(
+                in srgb,
+                var(--secondary-background-color, transparent) 82%,
+                var(--text-color, #667085) 18%
+            ) !important;
+    }
+
+    /* Native form widgets */
     .stTextInput input,
     .stNumberInput input,
     .stDateInput input,
     .stTimeInput input,
-    .stTextArea textarea {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        background-color:{ARAYA_INPUT_BG} !important;
-        border-color:{ARAYA_BORDER} !important;
-        -webkit-text-fill-color:{ARAYA_TEXT_STRONG} !important;
-        caret-color:{ARAYA_TEXT_STRONG} !important;
-    }}
+    .stTextArea textarea {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        background-color:
+            var(--secondary-background-color, transparent) !important;
+        caret-color: var(--text-color, inherit) !important;
+    }
 
     .stTextInput input::placeholder,
     .stNumberInput input::placeholder,
     .stDateInput input::placeholder,
     .stTimeInput input::placeholder,
-    .stTextArea textarea::placeholder {{
-        color:{ARAYA_MUTED} !important;
-        -webkit-text-fill-color:{ARAYA_MUTED} !important;
-        opacity:.78 !important;
-    }}
+    .stTextArea textarea::placeholder {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        opacity: .48 !important;
+    }
 
     .stSelectbox [data-baseweb="select"] > div,
-    .stMultiSelect [data-baseweb="select"] > div {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        background-color:{ARAYA_INPUT_BG} !important;
-        border-color:{ARAYA_BORDER} !important;
-    }}
+    .stMultiSelect [data-baseweb="select"] > div {
+        color: var(--text-color, inherit) !important;
+        background-color:
+            var(--secondary-background-color, transparent) !important;
+        border-color:
+            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            !important;
+    }
+
     .stSelectbox [data-baseweb="select"] *,
-    .stMultiSelect [data-baseweb="select"] * {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        -webkit-text-fill-color:{ARAYA_TEXT_STRONG} !important;
-    }}
+    .stMultiSelect [data-baseweb="select"] * {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+    }
+
     .stSelectbox svg,
     .stMultiSelect svg,
     .stDateInput svg,
-    .stTimeInput svg {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        fill:currentColor !important;
-    }}
+    .stTimeInput svg {
+        color: var(--text-color, inherit) !important;
+        fill: currentColor !important;
+    }
 
-    /* ---------- Weekly Dashboard filter strip ----------
-       Cards/calendar retain their designed pastel palette. */
-    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor) {{
-        background:{"rgba(14,17,23,.985)" if ARAYA_DARK else "rgba(255,255,255,.985)"} !important;
-        border-bottom-color:{ARAYA_BORDER} !important;
-    }}
+    /* Weekly Dashboard sticky header/filter strip only.
+       KPI cards and calendar keep their designed pastel palette. */
+    div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor) {
+        background: var(--background-color, transparent) !important;
+        border-bottom-color:
+            color-mix(in srgb, var(--text-color, #667085) 22%, transparent)
+            !important;
+    }
 
     div[data-testid="stHorizontalBlock"] .stSelectbox > label,
-    .filter-label {{
-        color:{ARAYA_TEXT} !important;
-        opacity:1 !important;
-    }}
+    .filter-label,
+    .filter-value {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        opacity: 1 !important;
+    }
 
     div[data-testid="stHorizontalBlock"] .stSelectbox > div > div,
-    div[data-testid="stHorizontalBlock"] .stPopover > button {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        background:{ARAYA_INPUT_BG} !important;
-        border-color:{ARAYA_BORDER} !important;
-    }}
-    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
-    div[data-testid="stHorizontalBlock"] .stPopover > button:hover {{
-        background:{ARAYA_INPUT_HOVER} !important;
-        border-color:{ARAYA_MUTED_2} !important;
-    }}
-    div[data-testid="stHorizontalBlock"] .stPopover > button,
-    div[data-testid="stHorizontalBlock"] .stPopover > button p,
-    div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] *,
-    .filter-value {{
-        color:{ARAYA_TEXT_STRONG} !important;
-        -webkit-text-fill-color:{ARAYA_TEXT_STRONG} !important;
-    }}
+    div[data-testid="stHorizontalBlock"] .stPopover > button {
+        color: var(--text-color, inherit) !important;
+        background: var(--secondary-background-color, transparent) !important;
+        border-color:
+            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            !important;
+    }
 
-    /* ---------- Generic custom monochrome icons ----------
-       Current custom black ARAYA symbols now follow the active text color. */
-    .araya-logo-mask {{
-        background-color:{ARAYA_TEXT_STRONG} !important;
-    }}
+    div[data-testid="stHorizontalBlock"] .stPopover > button p,
+    div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] * {
+        color: var(--text-color, inherit) !important;
+        -webkit-text-fill-color: var(--text-color, inherit) !important;
+    }
+
+    div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
+    div[data-testid="stHorizontalBlock"] .stPopover > button:hover {
+        background:
+            color-mix(
+                in srgb,
+                var(--secondary-background-color, transparent) 82%,
+                var(--text-color, #667085) 18%
+            ) !important;
+    }
+
+    [data-testid="stExpander"] details,
+    [data-testid="stForm"] {
+        border-color:
+            color-mix(in srgb, var(--text-color, #667085) 20%, transparent)
+            !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
