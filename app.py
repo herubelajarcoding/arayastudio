@@ -726,6 +726,31 @@ if psycopg2 is not None:
     DB_INTEGRITY_ERRORS.append(psycopg2.IntegrityError)
 DB_INTEGRITY_ERRORS = tuple(DB_INTEGRITY_ERRORS)
 
+def _clear_read_caches():
+    """Clear cached database reads after a successful write.
+
+    This keeps UI reads fast during normal navigation while making newly
+    saved/edited/deleted data visible immediately.
+    """
+    for fn_name in (
+        "_db_df_cached",
+        "_project_name",
+        "project_name_map",
+        "get_projects",
+        "get_staff",
+        "get_refs",
+        "load_activities",
+        "master_values",
+        "get_master_table",
+    ):
+        fn=globals().get(fn_name)
+        try:
+            if fn is not None and hasattr(fn,"clear"):
+                fn.clear()
+        except Exception:
+            pass
+
+
 def init_db():
     conn = get_conn()
 
@@ -824,6 +849,7 @@ def init_db():
         """
     )
     conn.commit()
+    _clear_read_caches()
     conn.close()
 
 
@@ -980,6 +1006,7 @@ def seed_from_workbook():
                     )
 
         conn.commit()
+        _clear_read_caches()
 
     except Exception as exc:
         conn.rollback()
@@ -1151,6 +1178,7 @@ def fmt_day(d):
     return d.strftime("%a")
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def project_name_map():
     conn = get_conn()
     df = pd.read_sql_query("SELECT id,name FROM projects ORDER BY id", conn)
@@ -1158,6 +1186,7 @@ def project_name_map():
     return dict(zip(df["id"], df["name"]))
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_projects():
     conn = get_conn()
     df = pd.read_sql_query(
@@ -1167,6 +1196,7 @@ def get_projects():
     return df
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_staff():
     conn = get_conn()
     df = pd.read_sql_query(
@@ -1176,6 +1206,7 @@ def get_staff():
     return df
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_refs(category):
     conn = get_conn()
     rows = conn.execute(
@@ -1186,6 +1217,7 @@ def get_refs(category):
     return [r[0] for r in rows]
 
 
+@st.cache_data(ttl=20, show_spinner=False)
 def load_activities(start_date, end_date, project_filter):
     conn = get_conn()
 
@@ -2095,6 +2127,7 @@ def init_master_database():
                             (str(r[21]), float(r[22])))
 
     conn.commit()
+    _clear_read_caches()
     conn.close()
 
 
@@ -2182,6 +2215,7 @@ def _crud_add(table, fields, values):
         [values[n] for n in names],
     )
     conn.commit()
+    _clear_read_caches()
     conn.close()
     _clear_master_caches()
     return True, "Data berhasil ditambahkan."
@@ -2197,6 +2231,7 @@ def _crud_update(table, fields, row_id, values):
         [values[n] for n in names] + [row_id],
     )
     conn.commit()
+    _clear_read_caches()
     conn.close()
     _clear_master_caches()
     return True, "Data berhasil diperbarui."
@@ -2206,6 +2241,7 @@ def _crud_delete(table, row_id):
     conn = get_conn()
     conn.execute(f"DELETE FROM master_{table} WHERE id=?", (row_id,))
     conn.commit()
+    _clear_read_caches()
     conn.close()
     _clear_master_caches()
     return True, "Data berhasil dihapus."
@@ -2293,11 +2329,18 @@ def master_values(table, field):
     return [r[0] for r in rows]
 
 
-def db_df(sql, params=()):
+@st.cache_data(ttl=20, show_spinner=False, max_entries=128)
+def _db_df_cached(sql, params_tuple):
     conn=get_conn()
-    df=pd.read_sql_query(sql,conn,params=params)
-    conn.close()
-    return df
+    try:
+        return pd.read_sql_query(sql,conn,params=params_tuple)
+    finally:
+        conn.close()
+
+
+def db_df(sql, params=()):
+    # Streamlit cache requires stable/hashable arguments.
+    return _db_df_cached(sql,tuple(params or ()))
 
 
 def ensure_v4_input_schema():
@@ -2315,6 +2358,7 @@ def ensure_v4_input_schema():
         )
     """)
     conn.commit()
+    _clear_read_caches()
     conn.close()
 
 
@@ -2335,9 +2379,15 @@ def _project_status_options():
 
 
 def _project_options():
-    # Only Active projects can be selected for new project tagging/allocation.
-    df=db_df("SELECT id,name FROM projects WHERE status='Active' ORDER BY id")
-    return df
+    # Active and On Hold projects remain available for operational recording.
+    # Cancelled/Completed stay in history but are excluded from new tagging.
+    # Workload is still counted only when status == Active (see allocation_calc).
+    return db_df("""
+        SELECT id,name
+        FROM projects
+        WHERE LOWER(COALESCE(status,'')) IN ('active','on hold')
+        ORDER BY id
+    """)
 
 
 def _staff_options():
@@ -2362,12 +2412,16 @@ def _lead_options():
     """)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def _project_name(pid):
-    if not pid: return ""
+    if not pid:
+        return ""
     conn=get_conn()
-    row=conn.execute("SELECT name FROM projects WHERE id=?",(pid,)).fetchone()
-    conn.close()
-    return row[0] if row else ""
+    try:
+        row=conn.execute("SELECT name FROM projects WHERE id=?",(pid,)).fetchone()
+        return row[0] if row else ""
+    finally:
+        conn.close()
 
 
 def _team_categories():
@@ -2445,6 +2499,7 @@ def _add_team():
                  intern_end.isoformat() if intern_end else None,
                  1 if active else 0))
             conn.commit()
+            _clear_read_caches()
             st.success("Team member berhasil ditambahkan.")
             st.rerun()
         except DB_INTEGRITY_ERRORS:
@@ -2549,6 +2604,7 @@ def _edit_team(df):
                  intern_end.isoformat() if intern_end else None,
                  1 if active else 0,int(rid)))
             conn.commit()
+            _clear_read_caches()
             st.success("Data berhasil diperbarui.")
             st.rerun()
         except DB_INTEGRITY_ERRORS:
@@ -2587,6 +2643,7 @@ def _delete_team(df):
             conn.execute("DELETE FROM freelance_project_mapping WHERE freelancer=?",(row["name"],))
             conn.execute("DELETE FROM staff WHERE id=?",(int(rid),))
             conn.commit()
+            _clear_read_caches()
             st.success("Team member benar-benar dihapus dari database.")
             st.rerun()
         except DB_INTEGRITY_ERRORS:
@@ -2859,6 +2916,7 @@ def _import_team_excel():
                     ),
                 )
             conn.commit()
+            _clear_read_caches()
             st.session_state["v4c_team_import_success"] = len(valid_rows)
             st.session_state["v4c_team_import_file"] = uploaded.name
             st.rerun()
@@ -2947,6 +3005,7 @@ def _add_project():
                  finish.isoformat() if finish else None,
                  _project_duration(start,finish),status,lead,size))
             conn.commit()
+            _clear_read_caches()
             st.success(f"Project {pid} berhasil ditambahkan.")
             st.rerun()
         except DB_INTEGRITY_ERRORS as exc:
@@ -3000,6 +3059,7 @@ def _edit_project(df):
                  finish.isoformat() if finish else None,
                  _project_duration(start,finish),status,lead,size,pid))
             conn.commit()
+            _clear_read_caches()
             st.success("Project berhasil diperbarui.")
             st.rerun()
         finally:
@@ -3016,7 +3076,7 @@ def _delete_project(df):
         archived=master_values("project_status","status")
         status="Archived" if "Archived" in archived else (archived[-1] if archived else "Archived")
         conn.execute("UPDATE projects SET status=? WHERE id=?",(status,pid))
-        conn.commit(); conn.close(); st.success("Project diarsipkan agar histori aktivitas tetap aman."); st.rerun()
+        conn.commit(); _clear_read_caches(); conn.close(); st.success("Project diarsipkan agar histori aktivitas tetap aman."); st.rerun()
 
 
 
@@ -3251,6 +3311,7 @@ def _import_project_excel():
                     (r["id"],r["name"],r["project_type"],r["start_date"],r["target_finish"],
                      r["duration_months"],r["status"],r["lead"],r["project_size"]))
             conn.commit()
+            _clear_read_caches()
             st.session_state["v5_project_import_success"]=len(valid_rows)
             st.session_state["v5_project_import_file"]=uploaded.name
             st.rerun()
@@ -3557,6 +3618,7 @@ def _import_allocation_excel():
                      r["role_on_project"],r["notes"])
                 )
             conn.commit()
+            _clear_read_caches()
             st.session_state["v6_allocation_import_success"]=len(valid_rows)
             st.session_state["v6_allocation_import_file"]=uploaded.name
             st.rerun()
@@ -3594,7 +3656,7 @@ def _add_allocation():
         try:
             conn.execute("""INSERT INTO staff_allocation(project_id,phase,staff,role_on_project,notes)
                             VALUES (?,?,?,?,?)""",(pid,phase,person,role,notes))
-            conn.commit(); st.success("Staff allocation berhasil ditambahkan."); st.rerun()
+            conn.commit(); _clear_read_caches(); st.success("Staff allocation berhasil ditambahkan."); st.rerun()
         except DB_INTEGRITY_ERRORS:
             st.error("Staff tersebut sudah dialokasikan pada project dan phase yang sama.")
         finally: conn.close()
@@ -3619,7 +3681,7 @@ def _edit_allocation(df):
         try:
             conn.execute("""UPDATE staff_allocation SET project_id=?,phase=?,staff=?,role_on_project=?,notes=? WHERE id=?""",
                          (pid,phase,person,role,notes,int(rid)))
-            conn.commit(); st.success("Allocation diperbarui."); st.rerun()
+            conn.commit(); _clear_read_caches(); st.success("Allocation diperbarui."); st.rerun()
         except DB_INTEGRITY_ERRORS: st.error("Allocation yang sama sudah ada.")
         finally: conn.close()
 
@@ -3629,7 +3691,7 @@ def _delete_allocation(df):
     labels={int(r.id):f"{r.project_id} • {r.phase} • {r.staff}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Allocation to Delete",list(labels),format_func=lambda x:labels[x],key="v4_alloc_del_id")
     if st.button("Delete Permanently",key="v4_alloc_delete",type="secondary"):
-        conn=get_conn(); conn.execute("DELETE FROM staff_allocation WHERE id=?",(int(rid),)); conn.commit(); conn.close()
+        conn=get_conn(); conn.execute("DELETE FROM staff_allocation WHERE id=?",(int(rid),)); conn.commit(); _clear_read_caches(); conn.close()
         st.success("Allocation dihapus."); st.rerun()
 
 
@@ -3683,7 +3745,7 @@ def _add_work():
             (project_id,start_date,end_date,activity_type,task,priority,pic,status,notes)
             VALUES (?,?,?,?,?,?,?,?,?)""",
             (pid,start.isoformat(),end.isoformat(),at,task.strip(),priority,pic,status,notes))
-        conn.commit(); conn.close(); st.success("Work activity berhasil ditambahkan."); st.rerun()
+        conn.commit(); _clear_read_caches(); conn.close(); st.success("Work activity berhasil ditambahkan."); st.rerun()
 
 
 def _edit_work(df):
@@ -3713,7 +3775,7 @@ def _edit_work(df):
         conn.execute("""UPDATE work_activity SET project_id=?,start_date=?,end_date=?,activity_type=?,
             task=?,priority=?,pic=?,status=?,notes=? WHERE id=?""",
             (pid,start.isoformat(),end.isoformat(),at,task.strip(),priority,pic,status,notes,int(rid)))
-        conn.commit();conn.close();st.success("Work activity diperbarui.");st.rerun()
+        conn.commit(); _clear_read_caches();conn.close();st.success("Work activity diperbarui.");st.rerun()
 
 
 def _delete_work(df):
@@ -3721,7 +3783,7 @@ def _delete_work(df):
     labels={int(r.id):f"{r.project_id} • {r.task}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Work Activity to Delete",list(labels),format_func=lambda x:labels[x],key="v4_work_del_id")
     if st.button("Delete Permanently",key="v4_work_delete",type="secondary"):
-        conn=get_conn();conn.execute("DELETE FROM work_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Activity dihapus.");st.rerun()
+        conn=get_conn();conn.execute("DELETE FROM work_activity WHERE id=?",(int(rid),));conn.commit(); _clear_read_caches();conn.close();st.success("Activity dihapus.");st.rerun()
 
 
 def _meeting_df():
@@ -3760,7 +3822,7 @@ def _add_meeting():
             VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (d.isoformat(),start.strftime("%H:%M"),end.strftime("%H:%M"),
              None if pid=="No Project" else pid,mt,a1,a2,a3,a4,loc,notes))
-        conn.commit();conn.close();st.success("Meeting berhasil ditambahkan.");st.rerun()
+        conn.commit(); _clear_read_caches();conn.close();st.success("Meeting berhasil ditambahkan.");st.rerun()
 
 
 def _edit_meeting(df):
@@ -3794,7 +3856,7 @@ def _edit_meeting(df):
         conn.execute("""UPDATE meeting_activity SET activity_date=?,start_time=?,end_time=?,project_id=?,meeting_type=?,
             attendee_1=?,attendee_2=?,attendee_3=?,attendee_4=?,location=?,agenda_notes=? WHERE id=?""",
             (d.isoformat(),start.strftime("%H:%M"),end.strftime("%H:%M"),None if pid=="No Project" else pid,mt,a1,a2,a3,a4,loc,notes,int(rid)))
-        conn.commit();conn.close();st.success("Meeting diperbarui.");st.rerun()
+        conn.commit(); _clear_read_caches();conn.close();st.success("Meeting diperbarui.");st.rerun()
 
 
 def _delete_meeting(df):
@@ -3802,7 +3864,7 @@ def _delete_meeting(df):
     labels={int(r.id):f"{r.activity_date} • {r.meeting_type}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Meeting to Delete",list(labels),format_func=lambda x:labels[x],key="v4_meet_del_id")
     if st.button("Delete Permanently",key="v4_meet_delete",type="secondary"):
-        conn=get_conn();conn.execute("DELETE FROM meeting_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Meeting dihapus.");st.rerun()
+        conn=get_conn();conn.execute("DELETE FROM meeting_activity WHERE id=?",(int(rid),));conn.commit(); _clear_read_caches();conn.close();st.success("Meeting dihapus.");st.rerun()
 
 
 def _other_df():
@@ -3823,7 +3885,7 @@ def _add_other():
         conn=get_conn()
         conn.execute("INSERT INTO other_activity(activity_date,activity,related_staff,notes) VALUES (?,?,?,?)",
                      (d.isoformat(),activity.strip(),None if person=="No Specific Staff" else person,notes))
-        conn.commit();conn.close();st.success("Other activity berhasil ditambahkan.");st.rerun()
+        conn.commit(); _clear_read_caches();conn.close();st.success("Other activity berhasil ditambahkan.");st.rerun()
 
 
 def _edit_other(df):
@@ -3845,7 +3907,7 @@ def _edit_other(df):
         conn=get_conn()
         conn.execute("UPDATE other_activity SET activity_date=?,activity=?,related_staff=?,notes=? WHERE id=?",
                      (d.isoformat(),activity.strip(),None if person=="No Specific Staff" else person,notes,int(rid)))
-        conn.commit();conn.close();st.success("Other activity diperbarui.");st.rerun()
+        conn.commit(); _clear_read_caches();conn.close();st.success("Other activity diperbarui.");st.rerun()
 
 
 def _delete_other(df):
@@ -3853,7 +3915,7 @@ def _delete_other(df):
     labels={int(r.id):f"{r.activity_date} • {r.activity}" for _,r in df.iterrows()}
     rid=st.selectbox("Select Other Activity to Delete",list(labels),format_func=lambda x:labels[x],key="v4_other_del_id")
     if st.button("Delete Permanently",key="v4_other_delete",type="secondary"):
-        conn=get_conn();conn.execute("DELETE FROM other_activity WHERE id=?",(int(rid),));conn.commit();conn.close();st.success("Other activity dihapus.");st.rerun()
+        conn=get_conn();conn.execute("DELETE FROM other_activity WHERE id=?",(int(rid),));conn.commit(); _clear_read_caches();conn.close();st.success("Other activity dihapus.");st.rerun()
 
 
 def input_activities_page():
@@ -3958,6 +4020,7 @@ def ensure_freelance_mapping_schema():
                 (default_status,)
             )
         conn.commit()
+        _clear_read_caches()
     finally:
         conn.close()
 
@@ -4044,6 +4107,7 @@ def input_freelance_mapping_page():
                                 VALUES (?,?,?)""",
                                 (freelancer,project_id,mapping_status))
                             conn.commit()
+                            _clear_read_caches()
                             st.success("Freelance project mapping berhasil ditambahkan.")
                             st.rerun()
                     except DB_INTEGRITY_ERRORS as exc:
@@ -4099,6 +4163,7 @@ def input_freelance_mapping_page():
                                 WHERE id=?""",
                                 (freelancer,project_id,mapping_status,int(rid)))
                             conn.commit()
+                            _clear_read_caches()
                             st.success("Mapping berhasil diperbarui.")
                             st.rerun()
                         except DB_INTEGRITY_ERRORS as exc:
@@ -4124,6 +4189,7 @@ def input_freelance_mapping_page():
                     conn=get_conn()
                     conn.execute("DELETE FROM freelance_project_mapping WHERE id=?",(int(rid),))
                     conn.commit()
+                    _clear_read_caches()
                     conn.close()
                     st.success("Mapping berhasil dihapus.")
                     st.rerun()
