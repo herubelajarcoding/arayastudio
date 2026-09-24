@@ -977,6 +977,95 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# ============================================================
+# V8e DARK/LIGHT POLISH — visual design unchanged
+# ============================================================
+st.markdown(
+    """
+    <style>
+    /* Activity Detail dialog shell follows the active Streamlit theme.
+       The pastel detail cards intentionally keep their existing V8d colors. */
+    [data-testid="stDialog"] h1,
+    [data-testid="stDialog"] h2,
+    [data-testid="stDialog"] h3,
+    [data-testid="stDialog"] [data-testid="stDialogHeader"] *,
+    [role="dialog"] h1,
+    [role="dialog"] h2,
+    [role="dialog"] h3 {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    [data-testid="stDialog"] .detail-date,
+    [role="dialog"] .detail-date {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    /* Keep the PDF action readable in both themes. */
+    [data-testid="stDialog"] .stDownloadButton > button,
+    [role="dialog"] .stDownloadButton > button {
+        color:var(--st-text-color, inherit) !important;
+        border-color:
+            color-mix(in srgb, var(--st-text-color, #667085) 28%, transparent)
+            !important;
+    }
+
+    [data-testid="stDialog"] .stDownloadButton > button p,
+    [role="dialog"] .stDownloadButton > button p {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    /* Streamlit / BaseWeb calendar popup.
+       Only neutral calendar UI follows the active theme; selected day keeps
+       the accent fill and white text. */
+    [data-baseweb="calendar"] {
+        color:var(--st-text-color, inherit) !important;
+        background:var(--st-secondary-background-color, transparent) !important;
+    }
+
+    [data-baseweb="calendar"] button,
+    [data-baseweb="calendar"] [role="button"],
+    [data-baseweb="calendar"] [role="gridcell"],
+    [data-baseweb="calendar"] [role="option"],
+    [data-baseweb="calendar"] div,
+    [data-baseweb="calendar"] span {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    [data-baseweb="calendar"] svg {
+        color:var(--st-text-color, inherit) !important;
+        fill:currentColor !important;
+    }
+
+    [data-baseweb="calendar"] [aria-disabled="true"],
+    [data-baseweb="calendar"] [aria-disabled="true"] * {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+        opacity:.42 !important;
+    }
+
+    [data-baseweb="calendar"] [aria-selected="true"],
+    [data-baseweb="calendar"] [aria-selected="true"] * {
+        color:#FFFFFF !important;
+        -webkit-text-fill-color:#FFFFFF !important;
+        opacity:1 !important;
+    }
+
+    /* The readonly touch-friendly date field itself still follows theme. */
+    [data-testid="stDateInput"] input {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+        background:var(--st-secondary-background-color, transparent) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ============================================================
 # DATABASE
 # ============================================================
