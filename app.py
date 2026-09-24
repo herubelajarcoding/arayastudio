@@ -1013,9 +1013,42 @@ def _install_v8e_client_bridge():
               });
             };
 
+            const patchExportPopover = () => {
+              const fg = getThemeTextColor();
+
+              const candidates = Array.from(
+                doc.querySelectorAll(
+                  '[data-testid*="popover" i],'
+                  + '[data-baseweb="popover"],'
+                  + '[role="dialog"]'
+                )
+              );
+
+              candidates.forEach((root) => {
+                const txt = (root.textContent || "").trim();
+                if (!txt.includes("Schedule Report")) return;
+
+                root.querySelectorAll(
+                  'h1,h2,h3,h4,h5,h6,p,label,span,small,button'
+                ).forEach((el) => {
+                  const isSelectValue = !!el.closest('[data-baseweb="select"]');
+                  if (isSelectValue) return;
+
+                  el.style.setProperty("color", fg, "important");
+                  el.style.setProperty("-webkit-text-fill-color", fg, "important");
+                });
+
+                root.querySelectorAll('svg').forEach((svg) => {
+                  svg.style.setProperty("color", fg, "important");
+                  svg.style.setProperty("fill", "currentColor", "important");
+                });
+              });
+            };
+
             const patchThemeSensitiveUI = () => {
               patchDialogTitle();
               patchDateInputs();
+              patchExportPopover();
             };
 
             patchThemeSensitiveUI();
@@ -1214,6 +1247,45 @@ st.markdown(
         justify-content:center !important;
         white-space:nowrap !important;
         box-shadow:none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# V8f Export PDF popover theme polish.
+st.markdown(
+    """
+    <style>
+    /* Theme-adaptive text inside Streamlit popovers. The browser bridge
+       further scopes the rule to the Schedule Report popover. */
+    [data-testid="stPopoverBody"] h1,
+    [data-testid="stPopoverBody"] h2,
+    [data-testid="stPopoverBody"] h3,
+    [data-testid="stPopoverBody"] h4,
+    [data-testid="stPopoverBody"] h5,
+    [data-testid="stPopoverBody"] h6,
+    [data-testid="stPopoverBody"] p,
+    [data-testid="stPopoverBody"] label,
+    [data-testid="stPopoverBody"] .stCaptionContainer,
+    [data-testid="stPopoverBody"] .stCaptionContainer p {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    [data-testid="stPopoverBody"] .stDownloadButton > button,
+    [data-testid="stPopoverBody"] .stDownloadButton > button p,
+    [data-testid="stPopoverBody"] .stDownloadButton > button span {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    [data-testid="stPopoverBody"] .stDownloadButton > button {
+        border-color:
+            color-mix(in srgb, var(--st-text-color, #667085) 28%, transparent)
+            !important;
+        background:var(--st-secondary-background-color, transparent) !important;
     }
     </style>
     """,
