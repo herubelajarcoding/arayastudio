@@ -5,6 +5,11 @@ import os
 import re
 
 try:
+    import psycopg
+except ImportError:
+    psycopg = None
+
+try:
     import psycopg2
 except ImportError:
     psycopg2 = None
@@ -617,13 +622,16 @@ def get_conn():
     """Use PostgreSQL when DATABASE_URL is configured; SQLite is local fallback."""
     url = _database_url()
     if url:
-        if psycopg2 is None:
-            raise RuntimeError(
-                "DATABASE_URL sudah diisi tetapi psycopg2 belum tersedia. "
-                "Pastikan psycopg2-binary ada di requirements.txt."
-            )
-        raw = psycopg2.connect(url, sslmode="require")
-        return _PGConnection(raw)
+        if psycopg is not None:
+            raw = psycopg.connect(url, sslmode="require")
+            return _PGConnection(raw)
+        if psycopg2 is not None:
+            raw = psycopg2.connect(url, sslmode="require")
+            return _PGConnection(raw)
+        raise RuntimeError(
+            "DATABASE_URL sudah diisi tetapi PostgreSQL driver belum tersedia. "
+            "Pastikan requirements.txt memuat psycopg[binary]."
+        )
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -659,9 +667,12 @@ def table_columns(conn, name):
     return {r[1]: {"notnull": bool(r[3])} for r in rows}
 
 
-DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+DB_INTEGRITY_ERRORS = [sqlite3.IntegrityError]
+if psycopg is not None:
+    DB_INTEGRITY_ERRORS.append(psycopg.IntegrityError)
 if psycopg2 is not None:
-    DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg2.IntegrityError)
+    DB_INTEGRITY_ERRORS.append(psycopg2.IntegrityError)
+DB_INTEGRITY_ERRORS = tuple(DB_INTEGRITY_ERRORS)
 
 def init_db():
     conn = get_conn()
