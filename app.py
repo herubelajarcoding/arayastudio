@@ -293,18 +293,9 @@ st.markdown(
     }
     .app-subtitle {color:var(--st-text-color, #667085); opacity:.68; margin-bottom:1rem;}
     .week-title {
-        font-size:1.12rem;
-        font-weight:800;
-        padding:.72rem .9rem;
-        border-radius:8px 8px 0 0;
-        background:#EEF2F6;
-        margin:0 !important;
-        text-align:center;
-        color:#172B4D;
-        letter-spacing:.01em;
-        border:1px solid #D0D5DD;
-        border-bottom:0;
-        box-sizing:border-box;
+        font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
+        border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
+        text-align: center; color:#172B4D; letter-spacing:.01em;
     }
     .schedule-grid {
         display: grid;
@@ -315,7 +306,7 @@ st.markdown(
         overflow-x: auto;
         border-left: 1px solid #EAECF0;
         border-top: 1px solid #EAECF0;
-        border-radius:0;
+        border-radius: 0 0 8px 8px;
     }
     .schedule-head {
         min-height: 58px;
@@ -882,7 +873,7 @@ st.markdown(
 )
 
 
-# V8e touch/date-header styling.
+# V8e weekly header + touch-date styling.
 st.markdown(
     """
     <style>
@@ -892,12 +883,13 @@ st.markdown(
         margin:.15rem 0 .35rem;
         color:var(--st-text-color, inherit);
     }
-    /* Weekly header visually restored to the original V8d table. */
-    /* One continuous weekly schedule block: title + dates + activity rows. */
-    div[data-testid="stVerticalBlock"]:has(> div > .v8e-week-shell-marker) {
+
+    /* Only the local weekly container loses Streamlit's default vertical gap. */
+    div[data-testid="stVerticalBlock"]:has(
+        > div[data-testid="stElementContainer"] .v8e-week-shell-marker
+    ) {
         gap:0 !important;
         row-gap:0 !important;
-        margin:0 0 1rem 0 !important;
         padding:0 !important;
     }
 
@@ -908,216 +900,100 @@ st.markdown(
         padding:0 !important;
     }
 
-    .schedule-header-grid {
-        display:grid;
-        align-items:stretch;
-        gap:0;
-        width:100%;
-        overflow:hidden;
-        border-left:1px solid #EAECF0;
-        border-top:1px solid #D0D5DD;
-        border-radius:0 !important;
-        margin:0 !important;
-        padding:0 !important;
+    /* Week title is the top of one connected schedule card. */
+    .week-title {
+        margin:.75rem 0 0 0 !important;
+        border-radius:8px 8px 0 0 !important;
+        border:1px solid #D0D5DD !important;
+        border-bottom:0 !important;
+        box-sizing:border-box !important;
     }
 
-    .schedule-header-grid .schedule-head {
-        height:58px;
-        min-height:58px;
-        box-sizing:border-box;
-        margin:0 !important;
-        border-radius:0 !important;
-    }
-
-    /* Body is physically attached to the date header. */
-    .schedule-body-grid {
-        border-top:0 !important;
-        border-radius:0 0 8px 8px !important;
-        margin:0 !important;
-        padding:0 !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(.schedule-body-grid) {
-        margin:0 !important;
-        padding:0 !important;
-    }
-
-    /* Invisible Streamlit interaction layer.
-       It overlays the HTML header and contributes zero document height. */
-    /* Collapse the Streamlit wrapper of the invisible click layer as well.
-       Previously the buttons were visually moved upward, but their outer
-       Streamlit element still reserved vertical space, creating the large
-       black gap before the activity rows. */
-    div[data-testid="stElementContainer"]:has(
-        div[data-testid="stHorizontalBlock"] [class*="st-key-v8e_date_"]
-    ) {
-        height:0 !important;
-        min-height:0 !important;
-        margin:0 !important;
-        padding:0 !important;
-        overflow:visible !important;
-    }
-
+    /* Date row: no column gaps, no rounded individual buttons. */
     div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
-        position:relative !important;
-        z-index:6 !important;
-        height:0 !important;
-        min-height:0 !important;
+        gap:0 !important;
         margin:0 !important;
         padding:0 !important;
-        gap:0 !important;
-        overflow:visible !important;
-        transform:translateY(-58px) !important;
     }
 
     div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"])
-        > div[data-testid="stColumn"] {
+      > div[data-testid="stColumn"] {
         padding:0 !important;
         margin:0 !important;
     }
 
+    .v8e-activity-head {
+        height:58px;
+        min-height:58px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-sizing:border-box;
+        margin:0 !important;
+        padding:.45rem .30rem;
+        font-size:.92rem;
+        font-weight:800;
+        color:#172B4D;
+        background:#F8FAFC;
+        border-top:1px solid #D0D5DD;
+        border-left:1px solid #EAECF0;
+        border-right:1px solid #EAECF0;
+        border-bottom:1px solid #D0D5DD;
+    }
+
     [class*="st-key-v8e_date_"] {
-        height:58px !important;
-        min-height:58px !important;
         margin:0 !important;
         padding:0 !important;
     }
 
     [class*="st-key-v8e_date_"] button {
-        display:block !important;
+        position:relative !important;
         width:100% !important;
         height:58px !important;
         min-height:58px !important;
         margin:0 !important;
-        padding:0 !important;
-        border:0 !important;
+        padding:25px .30rem 5px !important;
         border-radius:0 !important;
-        background:transparent !important;
+        border:0 !important;
+        border-top:1px solid #D0D5DD !important;
+        border-right:1px solid #EAECF0 !important;
+        border-bottom:1px solid #D0D5DD !important;
+        background:#F8FAFC !important;
+        color:#101828 !important;
         box-shadow:none !important;
-        opacity:0 !important;
         cursor:pointer !important;
     }
 
-    [class*="st-key-v8e_date_"] button:hover,
-    [class*="st-key-v8e_date_"] button:focus,
-    [class*="st-key-v8e_date_"] button:active {
-        background:transparent !important;
-        border:0 !important;
-        box-shadow:none !important;
-        opacity:0 !important;
+    [class*="st-key-v8e_date_"] button:hover {
+        background:#EEF4FF !important;
     }
 
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# V8e final schedule continuity fix.
-st.markdown(
-    """
-    <style>
-    /* Scope to one weekly schedule container. */
-    div[data-testid="stVerticalBlock"]:has(.v8e-week-shell-marker) {
-        position:relative !important;
-        gap:0 !important;
-        row-gap:0 !important;
-        padding:0 !important;
-    }
-
-    /* Streamlit wraps every markdown/button row in stElementContainer.
-       Remove spacing from the visible schedule pieces. */
-    div[data-testid="stElementContainer"]:has(.v8e-week-shell-marker),
-    div[data-testid="stElementContainer"]:has(.week-title),
-    div[data-testid="stElementContainer"]:has(.schedule-header-grid),
-    div[data-testid="stElementContainer"]:has(.schedule-body-grid) {
+    [class*="st-key-v8e_date_"] button p {
         margin:0 !important;
         padding:0 !important;
+        font-size:1rem !important;
+        line-height:1 !important;
+        font-weight:800 !important;
+        color:#101828 !important;
+        -webkit-text-fill-color:#101828 !important;
+        text-align:center !important;
     }
 
-    div[data-testid="stElementContainer"]:has(.v8e-week-shell-marker) {
-        height:0 !important;
-        min-height:0 !important;
-        overflow:visible !important;
-    }
-
-    /* THIS is the important fix:
-       remove the whole invisible date-button row from normal flow.
-       It is absolutely positioned over the date header instead. */
-    div[data-testid="stVerticalBlock"]:has(.v8e-week-shell-marker)
-      > div[data-testid="stElementContainer"]:has([class*="st-key-v8e_date_"]) {
-        position:absolute !important;
-        left:0 !important;
-        right:0 !important;
-        top:58px !important;
-        width:100% !important;
-        height:58px !important;
-        min-height:58px !important;
-        margin:0 !important;
-        padding:0 !important;
-        z-index:20 !important;
-        overflow:visible !important;
-        pointer-events:auto !important;
-    }
-
-    /* Depending on Streamlit DOM nesting, the date row can be one wrapper
-       deeper. Cover that layout too without reserving any vertical space. */
-    div[data-testid="stElementContainer"]:has(
-        div[data-testid="stHorizontalBlock"] [class*="st-key-v8e_date_"]
-    ) {
-        position:absolute !important;
-        left:0 !important;
-        right:0 !important;
-        width:100% !important;
-        height:58px !important;
-        min-height:58px !important;
-        margin:0 !important;
-        padding:0 !important;
-        z-index:20 !important;
-        overflow:visible !important;
-    }
-
-    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
-        transform:none !important;
-        height:58px !important;
-        min-height:58px !important;
-        margin:0 !important;
-        padding:0 !important;
-        gap:0 !important;
-    }
-
-    /* Visible pieces now touch each other exactly. */
-    .week-title {
-        margin:0 !important;
-        border-radius:8px 8px 0 0 !important;
-    }
-
-    .schedule-header-grid {
-        margin:0 !important;
-        border-radius:0 !important;
-    }
-
-    .schedule-body-grid {
+    /* Body starts immediately under the native date row. */
+    .v8e-schedule-body {
         margin:0 !important;
         border-top:0 !important;
         border-radius:0 0 8px 8px !important;
     }
 
-    /* Ensure ACTIVITY label stays visible in the first header cell. */
-    .schedule-header-grid .activity-head {
-        display:flex !important;
-        align-items:center !important;
-        justify-content:center !important;
-        color:#172B4D !important;
-        font-weight:800 !important;
-        opacity:1 !important;
-        visibility:visible !important;
+    div[data-testid="stElementContainer"]:has(.v8e-schedule-body) {
+        margin:0 !important;
+        padding:0 !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================
 # DATABASE
@@ -2115,44 +1991,76 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
     if week_no is None:
         week_no = 1
+
+    # Per-date CSS: small day-of-week label is rendered with ::before while
+    # the native button text remains the larger date. This preserves the
+    # original two-line visual without HTML links or overlay hacks.
+    date_css=[]
+    for d in days:
+        key=f"v8e_date_{week_no}_{d.isoformat()}"
+        dow=fmt_day(d).upper()
+        date_css.append(
+            f"""
+            [class*="st-key-{key}"] button::before {{
+                content:"{dow}";
+                display:block;
+                position:absolute;
+                top:10px;
+                left:0;
+                right:0;
+                font-size:.72rem;
+                line-height:1;
+                font-weight:700;
+                color:#667085;
+                text-align:center;
+                text-transform:uppercase;
+            }}
+            """
+        )
+        is_non_working,_=holiday_info(d)
+        if is_non_working:
+            date_css.append(
+                f"""
+                [class*="st-key-{key}"] button {{
+                    background:#ECFDF3 !important;
+                    border-color:#ABEFC6 !important;
+                    color:#067647 !important;
+                }}
+                [class*="st-key-{key}"] button::before,
+                [class*="st-key-{key}"] button p {{
+                    color:#067647 !important;
+                    -webkit-text-fill-color:#067647 !important;
+                    font-weight:800 !important;
+                }}
+                [class*="st-key-{key}"] button:hover {{
+                    background:#D1FADF !important;
+                }}
+                """
+            )
+
     with st.container():
         st.markdown(
             f'<div class="v8e-week-shell-marker"></div>'
+            f'<style>{"".join(date_css)}</style>'
             f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
             f'{end_date.strftime("%d %b %Y")}</div>',
             unsafe_allow_html=True,
         )
 
-        # V8e final header:
-        # Keep the original V8d visual header as pure HTML, then place transparent
-        # native Streamlit buttons exactly over each date cell. This preserves the
-        # original table design while keeping the no-navigation dialog behavior.
-        header_grid = ['<div class="schedule-head activity-head">ACTIVITY</div>']
-        for d in days:
-            is_non_working,holiday_label=holiday_info(d)
-            holiday_class=" non-working-day" if is_non_working else ""
-            header_grid.append(
-                f'<div class="schedule-head{holiday_class}">'
-                f'<div class="dow">{fmt_day(d)}</div>'
-                f'<div class="day">{d.strftime("%d %b")}</div>'
-                f'</div>'
+        # Visible native Streamlit date row. No query-string navigation and
+        # no invisible overlay: this is both the design and click target.
+        header_cols=st.columns([0.8]+[1]*len(days),gap=None)
+        with header_cols[0]:
+            st.markdown(
+                '<div class="v8e-activity-head">ACTIVITY</div>',
+                unsafe_allow_html=True,
             )
 
-        st.markdown(
-            f'<div class="schedule-header-grid" '
-            f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
-            + ''.join(header_grid) + '</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Transparent native buttons provide the interaction layer. They sit
-        # directly over the HTML cells and occupy no extra vertical layout space.
-        overlay_cols=st.columns([0.8]+[1]*len(days),gap=None)
         clicked_date=None
         for idx,d in enumerate(days):
-            with overlay_cols[idx+1]:
+            with header_cols[idx+1]:
                 if st.button(
-                    " ",
+                    d.strftime("%d %b"),
                     key=f"v8e_date_{week_no}_{d.isoformat()}",
                     use_container_width=True,
                 ):
@@ -2163,44 +2071,45 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
                 clicked_date,work,meetings,others,visible_activities
             )
 
-        grid = []
-
-        lane_specs = [
-            ("WORK", "work", "▣"),
-            ("MEETING", "meeting", "●"),
-            ("OTHER", "other", "•••"),
+        grid=[]
+        lane_specs=[
+            ("WORK","work","▣"),
+            ("MEETING","meeting","●"),
+            ("OTHER","other","•••"),
         ]
-        lane_specs = [x for x in lane_specs if x[1] in visible_activities]
+        lane_specs=[x for x in lane_specs if x[1] in visible_activities]
 
-        for lane_name, lane_type, lane_icon in lane_specs:
+        for lane_name,lane_type,lane_icon in lane_specs:
             grid.append(
-                f'<div class="lane-label {lane_type}-lane"><span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
+                f'<div class="lane-label {lane_type}-lane">'
+                f'<span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
             )
 
             for d in days:
-                if lane_type == "work":
-                    rows = []
-                    for (gd, pid), items in work_groups.items():
-                        if gd == d:
+                if lane_type=="work":
+                    rows=[]
+                    for (gd,pid),items in work_groups.items():
+                        if gd==d:
                             rows.extend(items)
-                    content = render_work_cell(rows)
-                    css_class = "cell work-cell"
-                elif lane_type == "meeting":
-                    rows = []
-                    for (gd, pid), items in meeting_groups.items():
-                        if gd == d:
+                    content=render_work_cell(rows)
+                    css_class="cell work-cell"
+                elif lane_type=="meeting":
+                    rows=[]
+                    for (gd,pid),items in meeting_groups.items():
+                        if gd==d:
                             rows.extend(items)
-                    content = render_meeting_cell(rows)
-                    css_class = "cell meeting-cell"
+                    content=render_meeting_cell(rows)
+                    css_class="cell meeting-cell"
                 else:
-                    content = render_other_cell(other_groups.get(d, []))
-                    css_class = "cell other-cell"
+                    content=render_other_cell(other_groups.get(d,[]))
+                    css_class="cell other-cell"
 
                 grid.append(f'<div class="{css_class}">{content}</div>')
 
         st.markdown(
-            f'<div class="schedule-grid schedule-body-grid" '
-            f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
+            f'<div class="schedule-grid v8e-schedule-body" '
+            f'style="grid-template-columns:minmax(105px,.8fr) '
+            f'repeat({len(days)},minmax(135px,1fr));">'
             + ''.join(grid) + '</div>',
             unsafe_allow_html=True,
         )
