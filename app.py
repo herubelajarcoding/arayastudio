@@ -937,8 +937,27 @@ st.markdown(
         padding:0 !important;
     }
 
+    div[data-testid="stElementContainer"]:has(.schedule-body-grid) {
+        margin:0 !important;
+        padding:0 !important;
+    }
+
     /* Invisible Streamlit interaction layer.
        It overlays the HTML header and contributes zero document height. */
+    /* Collapse the Streamlit wrapper of the invisible click layer as well.
+       Previously the buttons were visually moved upward, but their outer
+       Streamlit element still reserved vertical space, creating the large
+       black gap before the activity rows. */
+    div[data-testid="stElementContainer"]:has(
+        div[data-testid="stHorizontalBlock"] [class*="st-key-v8e_date_"]
+    ) {
+        height:0 !important;
+        min-height:0 !important;
+        margin:0 !important;
+        padding:0 !important;
+        overflow:visible !important;
+    }
+
     div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
         position:relative !important;
         z-index:6 !important;
