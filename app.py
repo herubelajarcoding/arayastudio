@@ -111,14 +111,14 @@ st.markdown(
     div[data-testid="stHorizontalBlock"] .stPopover > button {
         min-height:42px !important;
         border-radius:9px !important;
-        border:1px solid color-mix(in srgb, var(--text-color, #172B4D) 18%, transparent) !important;
-        background:var(--secondary-background-color, #F5F8FC) !important;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 18%, transparent) !important;
+        background:var(--st-secondary-background-color, #F5F8FC) !important;
         box-shadow:none !important;
     }
     div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
     div[data-testid="stHorizontalBlock"] .stPopover > button:hover {
-        border-color:color-mix(in srgb, var(--text-color, #172B4D) 34%, transparent) !important;
-        background:color-mix(in srgb, var(--secondary-background-color, #F0F5FA) 88%, var(--text-color, #172B4D) 12%) !important;
+        border-color:color-mix(in srgb, var(--st-text-color, #172B4D) 34%, transparent) !important;
+        background:color-mix(in srgb, var(--st-secondary-background-color, #F0F5FA) 88%, var(--st-text-color, #172B4D) 12%) !important;
     }
     div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] > div {
         min-height:42px !important;
@@ -129,21 +129,21 @@ st.markdown(
         width:100% !important;
         min-height:42px !important;
         justify-content:flex-start !important;
-        color:var(--text-color, #172B4D) !important;
+        color:var(--st-text-color, #172B4D) !important;
         font-weight:600 !important;
         padding:0 .8rem !important;
         border-radius:9px !important;
-        border:1px solid color-mix(in srgb, var(--text-color, #172B4D) 18%, transparent) !important;
-        background:var(--secondary-background-color, #F5F8FC) !important;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 18%, transparent) !important;
+        background:var(--st-secondary-background-color, #F5F8FC) !important;
         box-shadow:none !important;
     }
     div[data-testid="stHorizontalBlock"] .stPopover > button p {
         font-size:.83rem !important;
         font-weight:600 !important;
-        color:var(--text-color, #172B4D) !important;
+        color:var(--st-text-color, #172B4D) !important;
     }
     .filter-label {
-        font-size:.74rem; font-weight:700; color:var(--text-color, #475467);
+        font-size:.74rem; font-weight:700; color:var(--st-text-color, #475467);
         opacity:.72;
         margin:0 0 .28rem .05rem; letter-spacing:.02em;
         height:1.18rem !important;
@@ -164,7 +164,7 @@ st.markdown(
         min-height:42px !important;
         box-sizing:border-box !important;
     }
-    .filter-value {font-size:.83rem;color:var(--text-color, #172B4D);font-weight:600;}
+    .filter-value {font-size:.83rem;color:var(--st-text-color, #172B4D);font-weight:600;}
     .app-title {display:block; font-size:2rem; line-height:1.3; font-weight:750; margin:0 0 0.1rem 0; padding-top:1.35rem; padding-bottom:.05rem; overflow:visible !important; height:auto !important; min-height:2.6rem;}
     /* ========================================================
        V3A STATIC SIDEBAR TREE
@@ -178,7 +178,7 @@ st.markdown(
         gap:.72rem;
         padding:.35rem .15rem 1.05rem;
         margin-bottom:.25rem;
-        border-bottom:1px solid color-mix(in srgb, var(--text-color, #172B4D) 16%, transparent);
+        border-bottom:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 16%, transparent);
     }
     .v3-brand-mark {
         width:42px;
@@ -194,7 +194,7 @@ st.markdown(
         display:block;
         width:100%;
         height:100%;
-        background-color:var(--text-color, #111111);
+        background-color:var(--st-text-color, #111111);
         -webkit-mask-repeat:no-repeat;
         mask-repeat:no-repeat;
         -webkit-mask-position:center;
@@ -225,12 +225,12 @@ st.markdown(
     .araya-home-rule {
         width:54px;
         height:1px;
-        background:var(--text-color, #111111);
+        background:var(--st-text-color, #111111);
         margin:0 auto 1.7rem;
     }
     .araya-home-title {
         margin:0;
-        color:var(--text-color, #111111);
+        color:var(--st-text-color, #111111);
         font-size:clamp(2.2rem,5vw,4.8rem);
         line-height:1;
         font-weight:500;
@@ -247,19 +247,19 @@ st.markdown(
         }
     }
     .v3-brand-name {
-        color:var(--text-color, #172B4D);
+        color:var(--st-text-color, #172B4D);
         font-size:1.08rem;
         font-weight:850;
         letter-spacing:.02em;
     }
     .v3-brand-sub {
-        color:var(--text-color, #667085);
+        color:var(--st-text-color, #667085);
         opacity:.62;
         font-size:.70rem;
         margin-top:.12rem;
     }
     .v3-nav-label {
-        color:var(--text-color, #98A2B3);
+        color:var(--st-text-color, #98A2B3);
         opacity:.52;
         font-size:.68rem;
         font-weight:800;
@@ -269,7 +269,7 @@ st.markdown(
 
     /* Module = section heading, not another clickable menu. */
     .v3-module-heading {
-        color:var(--text-color, #172B4D);
+        color:var(--st-text-color, #172B4D);
         font-size:1.02rem;
         font-weight:800;
         line-height:1.25;
@@ -291,7 +291,7 @@ st.markdown(
     section[data-testid="stSidebar"] .stButton > button:hover {
         background:#F2F4F7;
     }
-    .app-subtitle {color:var(--text-color, #667085); opacity:.68; margin-bottom:1rem;}
+    .app-subtitle {color:var(--st-text-color, #667085); opacity:.68; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
         border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
@@ -614,9 +614,9 @@ st.markdown(
     .stDateInput input,
     .stTimeInput input,
     .stTextArea textarea {
-        color:var(--text-color, #111827) !important;
-        background-color:var(--secondary-background-color, #F5F8FC) !important;
-        caret-color:var(--text-color, #111827) !important;
+        color:var(--st-text-color, #111827) !important;
+        background-color:var(--st-secondary-background-color, #F5F8FC) !important;
+        caret-color:var(--st-text-color, #111827) !important;
     }
 
     .stTextInput input::placeholder,
@@ -624,40 +624,40 @@ st.markdown(
     .stDateInput input::placeholder,
     .stTimeInput input::placeholder,
     .stTextArea textarea::placeholder {
-        color:var(--text-color, #667085) !important;
+        color:var(--st-text-color, #667085) !important;
         opacity:.48 !important;
     }
 
     .stSelectbox [data-baseweb="select"] > div,
     .stMultiSelect [data-baseweb="select"] > div {
-        color:var(--text-color, #111827) !important;
-        background-color:var(--secondary-background-color, #F5F8FC) !important;
-        border-color:color-mix(in srgb, var(--text-color, #111827) 18%, transparent) !important;
+        color:var(--st-text-color, #111827) !important;
+        background-color:var(--st-secondary-background-color, #F5F8FC) !important;
+        border-color:color-mix(in srgb, var(--st-text-color, #111827) 18%, transparent) !important;
     }
 
     .stSelectbox [data-baseweb="select"] *,
     .stMultiSelect [data-baseweb="select"] * {
-        color:var(--text-color, #111827) !important;
+        color:var(--st-text-color, #111827) !important;
     }
 
     .stSelectbox svg,
     .stMultiSelect svg,
     .stDateInput svg,
     .stTimeInput svg {
-        color:var(--text-color, #111827) !important;
+        color:var(--st-text-color, #111827) !important;
         fill:currentColor !important;
     }
 
     /* Labels and ordinary app-shell text follow the active Streamlit theme. */
     .app-title,
     section[data-testid="stSidebar"] {
-        color:var(--text-color, #111827) !important;
+        color:var(--st-text-color, #111827) !important;
     }
 
     /* Keep neutral structural surfaces from becoming bright white in dark mode. */
     [data-testid="stExpander"] details,
     [data-testid="stForm"] {
-        border-color:color-mix(in srgb, var(--text-color, #111827) 16%, transparent) !important;
+        border-color:color-mix(in srgb, var(--st-text-color, #111827) 16%, transparent) !important;
     }
 
     </style>
@@ -673,23 +673,28 @@ st.markdown(
     """
     <style>
     /* App shell */
+    html, body, [data-testid="stAppViewContainer"],
+    section[data-testid="stSidebar"] {
+        color: var(--st-text-color) !important;
+    }
+
     .app-title,
     .v3-brand-name,
     .v3-module-heading,
     .araya-home-title {
-        color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
     }
 
     .app-subtitle,
     .v3-brand-sub,
     .v3-nav-label {
-        color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
         opacity: .66 !important;
     }
 
     .v3-brand {
         border-bottom-color:
-            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 24%, transparent)
             !important;
     }
 
@@ -697,26 +702,47 @@ st.markdown(
     .araya-logo-mask,
     .v3-brand-mark .araya-logo-mask,
     .araya-home .araya-logo-mask {
-        background-color: var(--text-color, #111111) !important;
+        background-color: var(--st-text-color, #111111) !important;
         transition: background-color .12s ease;
     }
 
     .araya-home-rule {
-        background: var(--text-color, #111111) !important;
+        background: var(--st-text-color, #111111) !important;
+    }
+
+    /* Identity / monochrome assets */
+    .v3-brand,
+    .v3-brand-name,
+    .v3-brand-sub,
+    .v3-nav-label,
+    .v3-module-heading,
+    .araya-home,
+    .araya-home-title {
+        color: var(--st-text-color) !important;
+    }
+
+    .araya-logo-mask,
+    .v3-brand-mark .araya-logo-mask,
+    .araya-home .araya-logo-mask {
+        background-color: var(--st-text-color) !important;
+    }
+
+    .araya-home-rule {
+        background-color: var(--st-text-color) !important;
     }
 
     /* Sidebar navigation */
     section[data-testid="stSidebar"] .stButton > button,
     section[data-testid="stSidebar"] .stButton > button p,
     section[data-testid="stSidebar"] .stButton > button span {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
     }
 
     section[data-testid="stSidebar"] .stButton > button {
         background: transparent !important;
         border-color:
-            color-mix(in srgb, var(--text-color, #667085) 28%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 28%, transparent)
             !important;
     }
 
@@ -724,8 +750,8 @@ st.markdown(
         background:
             color-mix(
                 in srgb,
-                var(--secondary-background-color, transparent) 82%,
-                var(--text-color, #667085) 18%
+                var(--st-secondary-background-color, transparent) 82%,
+                var(--st-text-color, #667085) 18%
             ) !important;
     }
 
@@ -735,11 +761,11 @@ st.markdown(
     .stDateInput input,
     .stTimeInput input,
     .stTextArea textarea {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
         background-color:
-            var(--secondary-background-color, transparent) !important;
-        caret-color: var(--text-color, inherit) !important;
+            var(--st-secondary-background-color, transparent) !important;
+        caret-color: var(--st-text-color, inherit) !important;
     }
 
     .stTextInput input::placeholder,
@@ -747,65 +773,65 @@ st.markdown(
     .stDateInput input::placeholder,
     .stTimeInput input::placeholder,
     .stTextArea textarea::placeholder {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
         opacity: .48 !important;
     }
 
     .stSelectbox [data-baseweb="select"] > div,
     .stMultiSelect [data-baseweb="select"] > div {
-        color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
         background-color:
-            var(--secondary-background-color, transparent) !important;
+            var(--st-secondary-background-color, transparent) !important;
         border-color:
-            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 24%, transparent)
             !important;
     }
 
     .stSelectbox [data-baseweb="select"] *,
     .stMultiSelect [data-baseweb="select"] * {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
     }
 
     .stSelectbox svg,
     .stMultiSelect svg,
     .stDateInput svg,
     .stTimeInput svg {
-        color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
         fill: currentColor !important;
     }
 
     /* Weekly Dashboard sticky header/filter strip only.
        KPI cards and calendar keep their designed pastel palette. */
     div[data-testid="stVerticalBlock"]:has(> div > #weekly-dashboard-anchor) {
-        background: var(--background-color, transparent) !important;
+        background: var(--st-background-color, transparent) !important;
         border-bottom-color:
-            color-mix(in srgb, var(--text-color, #667085) 22%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 22%, transparent)
             !important;
     }
 
     div[data-testid="stHorizontalBlock"] .stSelectbox > label,
     .filter-label,
     .filter-value {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
         opacity: 1 !important;
     }
 
     div[data-testid="stHorizontalBlock"] .stSelectbox > div > div,
     div[data-testid="stHorizontalBlock"] .stPopover > button {
-        color: var(--text-color, inherit) !important;
-        background: var(--secondary-background-color, transparent) !important;
+        color: var(--st-text-color, inherit) !important;
+        background: var(--st-secondary-background-color, transparent) !important;
         border-color:
-            color-mix(in srgb, var(--text-color, #667085) 24%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 24%, transparent)
             !important;
     }
 
     div[data-testid="stHorizontalBlock"] .stPopover > button p,
     div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] * {
-        color: var(--text-color, inherit) !important;
-        -webkit-text-fill-color: var(--text-color, inherit) !important;
+        color: var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color: var(--st-text-color, inherit) !important;
     }
 
     div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
@@ -813,15 +839,15 @@ st.markdown(
         background:
             color-mix(
                 in srgb,
-                var(--secondary-background-color, transparent) 82%,
-                var(--text-color, #667085) 18%
+                var(--st-secondary-background-color, transparent) 82%,
+                var(--st-text-color, #667085) 18%
             ) !important;
     }
 
     [data-testid="stExpander"] details,
     [data-testid="stForm"] {
         border-color:
-            color-mix(in srgb, var(--text-color, #667085) 20%, transparent)
+            color-mix(in srgb, var(--st-text-color, #667085) 20%, transparent)
             !important;
     }
     </style>
