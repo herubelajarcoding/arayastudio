@@ -926,26 +926,114 @@ def _install_v8e_client_bridge():
               btn.click();
             }, true);
 
+            const getThemeTextColor = () => {
+              const appRoot =
+                doc.querySelector('[data-testid="stAppViewContainer"]') ||
+                doc.body;
+              return parentWin.getComputedStyle(appRoot).color || "#FFFFFF";
+            };
+
+            const patchDialogTitle = () => {
+              const fg = getThemeTextColor();
+              doc.querySelectorAll('[role="dialog"] *').forEach((el) => {
+                const ownText = Array.from(el.childNodes || [])
+                  .filter((n) => n.nodeType === Node.TEXT_NODE)
+                  .map((n) => (n.textContent || "").trim())
+                  .join(" ")
+                  .trim();
+
+                if (ownText === "Activity Detail") {
+                  el.style.setProperty("color", fg, "important");
+                  el.style.setProperty("-webkit-text-fill-color", fg, "important");
+                }
+              });
+            };
+
             const patchDateInputs = () => {
+              const fg = getThemeTextColor();
+
               doc.querySelectorAll('[data-testid="stDateInput"] input').forEach((input) => {
                 input.setAttribute("inputmode", "none");
                 input.setAttribute("autocomplete", "off");
                 input.readOnly = true;
                 input.style.cursor = "pointer";
                 input.style.caretColor = "transparent";
+                input.style.setProperty("color", fg, "important");
+                input.style.setProperty("-webkit-text-fill-color", fg, "important");
+              });
+
+              // Streamlit 1.62+ no longer uses BaseWeb for DateInput.
+              // Detect the open calendar structurally instead of depending on
+              // a specific generated class name.
+              const monthWords = [
+                "january","february","march","april","may","june",
+                "july","august","september","october","november","december",
+                "januari","februari","maret","april","mei","juni",
+                "juli","agustus","september","oktober","november","desember"
+              ];
+
+              const candidates = Array.from(
+                doc.querySelectorAll(
+                  '[role="dialog"],[role="presentation"],[data-testid*="popover" i],'
+                  + '[data-testid*="calendar" i],[class*="calendar" i]'
+                )
+              );
+
+              candidates.forEach((root) => {
+                const txt = (root.textContent || "").toLowerCase();
+                const hasMonth = monthWords.some((m) => txt.includes(m));
+                const hasYear = /20\d{2}/.test(txt);
+                const dayLike = root.querySelectorAll('button,[role="gridcell"]').length;
+
+                if (!(hasMonth && hasYear && dayLike >= 7)) return;
+
+                root.querySelectorAll(
+                  'button,[role="button"],[role="gridcell"],div,span'
+                ).forEach((el) => {
+                  if (
+                    el.getAttribute("aria-selected") === "true" ||
+                    el.closest('[aria-selected="true"]')
+                  ) {
+                    el.style.setProperty("color", "#FFFFFF", "important");
+                    el.style.setProperty("-webkit-text-fill-color", "#FFFFFF", "important");
+                  } else {
+                    el.style.setProperty("color", fg, "important");
+                    el.style.setProperty("-webkit-text-fill-color", fg, "important");
+                  }
+                });
+
+                root.querySelectorAll('svg').forEach((svg) => {
+                  svg.style.setProperty("color", fg, "important");
+                  svg.style.setProperty("fill", "currentColor", "important");
+                });
+
+                root.querySelectorAll('[aria-disabled="true"]').forEach((el) => {
+                  el.style.setProperty("opacity", "0.42", "important");
+                });
               });
             };
 
-            patchDateInputs();
+            const patchThemeSensitiveUI = () => {
+              patchDialogTitle();
+              patchDateInputs();
+            };
+
+            patchThemeSensitiveUI();
 
             const observer = new MutationObserver(() => {
-              patchDateInputs();
+              patchThemeSensitiveUI();
             });
 
             observer.observe(doc.documentElement, {
               childList: true,
-              subtree: true
+              subtree: true,
+              attributes: true,
+              attributeFilter: ["class", "style", "data-theme"]
             });
+
+            // Some browsers apply theme variables after the DOM mutation.
+            parentWin.setTimeout(patchThemeSensitiveUI, 80);
+            parentWin.setTimeout(patchThemeSensitiveUI, 250);
           }
         })();
         </script>
@@ -1060,6 +1148,40 @@ st.markdown(
         color:var(--st-text-color, inherit) !important;
         -webkit-text-fill-color:var(--st-text-color, inherit) !important;
         background:var(--st-secondary-background-color, transparent) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# V8e dark-mode fallback for modern Streamlit date/calendar markup.
+st.markdown(
+    """
+    <style>
+    /* Dialog native heading can vary between Streamlit versions. */
+    [role="dialog"] [data-testid*="Heading" i],
+    [role="dialog"] header,
+    [role="dialog"] header * {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    /* Current Streamlit DateInput/calendar no longer always uses BaseWeb. */
+    [data-testid*="calendar" i],
+    [data-testid*="calendar" i] *,
+    [class*="calendar" i],
+    [class*="calendar" i] * {
+        color:var(--st-text-color, inherit) !important;
+        -webkit-text-fill-color:var(--st-text-color, inherit) !important;
+    }
+
+    [data-testid*="calendar" i] [aria-selected="true"],
+    [data-testid*="calendar" i] [aria-selected="true"] *,
+    [class*="calendar" i] [aria-selected="true"],
+    [class*="calendar" i] [aria-selected="true"] * {
+        color:#FFFFFF !important;
+        -webkit-text-fill-color:#FFFFFF !important;
     }
     </style>
     """,
