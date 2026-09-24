@@ -293,9 +293,18 @@ st.markdown(
     }
     .app-subtitle {color:var(--st-text-color, #667085); opacity:.68; margin-bottom:1rem;}
     .week-title {
-        font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
-        border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
-        text-align: center; color:#172B4D; letter-spacing:.01em;
+        font-size:1.12rem;
+        font-weight:800;
+        padding:.72rem .9rem;
+        border-radius:8px 8px 0 0;
+        background:#EEF2F6;
+        margin:0 !important;
+        text-align:center;
+        color:#172B4D;
+        letter-spacing:.01em;
+        border:1px solid #D0D5DD;
+        border-bottom:0;
+        box-sizing:border-box;
     }
     .schedule-grid {
         display: grid;
@@ -306,7 +315,7 @@ st.markdown(
         overflow-x: auto;
         border-left: 1px solid #EAECF0;
         border-top: 1px solid #EAECF0;
-        border-radius: 0 0 8px 8px;
+        border-radius:0;
     }
     .schedule-head {
         min-height: 58px;
@@ -884,6 +893,21 @@ st.markdown(
         color:var(--st-text-color, inherit);
     }
     /* Weekly header visually restored to the original V8d table. */
+    /* One continuous weekly schedule block: title + dates + activity rows. */
+    div[data-testid="stVerticalBlock"]:has(> div > .v8e-week-shell-marker) {
+        gap:0 !important;
+        row-gap:0 !important;
+        margin:0 0 1rem 0 !important;
+        padding:0 !important;
+    }
+
+    .v8e-week-shell-marker {
+        display:none !important;
+        height:0 !important;
+        margin:0 !important;
+        padding:0 !important;
+    }
+
     .schedule-header-grid {
         display:grid;
         align-items:stretch;
@@ -891,8 +915,8 @@ st.markdown(
         width:100%;
         overflow:hidden;
         border-left:1px solid #EAECF0;
-        border-top:1px solid #EAECF0;
-        border-radius:8px 8px 0 0;
+        border-top:1px solid #D0D5DD;
+        border-radius:0 !important;
         margin:0 !important;
         padding:0 !important;
     }
@@ -902,13 +926,15 @@ st.markdown(
         min-height:58px;
         box-sizing:border-box;
         margin:0 !important;
+        border-radius:0 !important;
     }
 
-    /* The body starts immediately after the header: no floating gap. */
+    /* Body is physically attached to the date header. */
     .schedule-body-grid {
         border-top:0 !important;
         border-radius:0 0 8px 8px !important;
-        margin-top:0 !important;
+        margin:0 !important;
+        padding:0 !important;
     }
 
     /* Invisible Streamlit interaction layer.
@@ -918,10 +944,11 @@ st.markdown(
         z-index:6 !important;
         height:0 !important;
         min-height:0 !important;
-        margin:-58px 0 0 0 !important;
+        margin:0 !important;
         padding:0 !important;
         gap:0 !important;
         overflow:visible !important;
+        transform:translateY(-58px) !important;
     }
 
     div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"])
@@ -1963,93 +1990,95 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
     if week_no is None:
         week_no = 1
-    st.markdown(
-        f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
-        f'{end_date.strftime("%d %b %Y")}</div>',
-        unsafe_allow_html=True,
-    )
-
-    # V8e final header:
-    # Keep the original V8d visual header as pure HTML, then place transparent
-    # native Streamlit buttons exactly over each date cell. This preserves the
-    # original table design while keeping the no-navigation dialog behavior.
-    header_grid = ['<div class="schedule-head activity-head">ACTIVITY</div>']
-    for d in days:
-        is_non_working,holiday_label=holiday_info(d)
-        holiday_class=" non-working-day" if is_non_working else ""
-        header_grid.append(
-            f'<div class="schedule-head{holiday_class}">'
-            f'<div class="dow">{fmt_day(d)}</div>'
-            f'<div class="day">{d.strftime("%d %b")}</div>'
-            f'</div>'
+    with st.container():
+        st.markdown(
+            f'<div class="v8e-week-shell-marker"></div>'
+            f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
+            f'{end_date.strftime("%d %b %Y")}</div>',
+            unsafe_allow_html=True,
         )
 
-    st.markdown(
-        f'<div class="schedule-header-grid" '
-        f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
-        + ''.join(header_grid) + '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Transparent native buttons provide the interaction layer. They sit
-    # directly over the HTML cells and occupy no extra vertical layout space.
-    overlay_cols=st.columns([0.8]+[1]*len(days),gap=None)
-    clicked_date=None
-    for idx,d in enumerate(days):
-        with overlay_cols[idx+1]:
-            if st.button(
-                " ",
-                key=f"v8e_date_{week_no}_{d.isoformat()}",
-                use_container_width=True,
-            ):
-                clicked_date=d
-
-    if clicked_date is not None:
-        show_date_detail(
-            clicked_date,work,meetings,others,visible_activities
-        )
-
-    grid = []
-
-    lane_specs = [
-        ("WORK", "work", "▣"),
-        ("MEETING", "meeting", "●"),
-        ("OTHER", "other", "•••"),
-    ]
-    lane_specs = [x for x in lane_specs if x[1] in visible_activities]
-
-    for lane_name, lane_type, lane_icon in lane_specs:
-        grid.append(
-            f'<div class="lane-label {lane_type}-lane"><span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
-        )
-
+        # V8e final header:
+        # Keep the original V8d visual header as pure HTML, then place transparent
+        # native Streamlit buttons exactly over each date cell. This preserves the
+        # original table design while keeping the no-navigation dialog behavior.
+        header_grid = ['<div class="schedule-head activity-head">ACTIVITY</div>']
         for d in days:
-            if lane_type == "work":
-                rows = []
-                for (gd, pid), items in work_groups.items():
-                    if gd == d:
-                        rows.extend(items)
-                content = render_work_cell(rows)
-                css_class = "cell work-cell"
-            elif lane_type == "meeting":
-                rows = []
-                for (gd, pid), items in meeting_groups.items():
-                    if gd == d:
-                        rows.extend(items)
-                content = render_meeting_cell(rows)
-                css_class = "cell meeting-cell"
-            else:
-                content = render_other_cell(other_groups.get(d, []))
-                css_class = "cell other-cell"
+            is_non_working,holiday_label=holiday_info(d)
+            holiday_class=" non-working-day" if is_non_working else ""
+            header_grid.append(
+                f'<div class="schedule-head{holiday_class}">'
+                f'<div class="dow">{fmt_day(d)}</div>'
+                f'<div class="day">{d.strftime("%d %b")}</div>'
+                f'</div>'
+            )
 
-            grid.append(f'<div class="{css_class}">{content}</div>')
+        st.markdown(
+            f'<div class="schedule-header-grid" '
+            f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
+            + ''.join(header_grid) + '</div>',
+            unsafe_allow_html=True,
+        )
 
-    st.markdown(
-        f'<div class="schedule-grid schedule-body-grid" '
-        f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
-        + ''.join(grid) + '</div>',
-        unsafe_allow_html=True,
-    )
+        # Transparent native buttons provide the interaction layer. They sit
+        # directly over the HTML cells and occupy no extra vertical layout space.
+        overlay_cols=st.columns([0.8]+[1]*len(days),gap=None)
+        clicked_date=None
+        for idx,d in enumerate(days):
+            with overlay_cols[idx+1]:
+                if st.button(
+                    " ",
+                    key=f"v8e_date_{week_no}_{d.isoformat()}",
+                    use_container_width=True,
+                ):
+                    clicked_date=d
+
+        if clicked_date is not None:
+            show_date_detail(
+                clicked_date,work,meetings,others,visible_activities
+            )
+
+        grid = []
+
+        lane_specs = [
+            ("WORK", "work", "▣"),
+            ("MEETING", "meeting", "●"),
+            ("OTHER", "other", "•••"),
+        ]
+        lane_specs = [x for x in lane_specs if x[1] in visible_activities]
+
+        for lane_name, lane_type, lane_icon in lane_specs:
+            grid.append(
+                f'<div class="lane-label {lane_type}-lane"><span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
+            )
+
+            for d in days:
+                if lane_type == "work":
+                    rows = []
+                    for (gd, pid), items in work_groups.items():
+                        if gd == d:
+                            rows.extend(items)
+                    content = render_work_cell(rows)
+                    css_class = "cell work-cell"
+                elif lane_type == "meeting":
+                    rows = []
+                    for (gd, pid), items in meeting_groups.items():
+                        if gd == d:
+                            rows.extend(items)
+                    content = render_meeting_cell(rows)
+                    css_class = "cell meeting-cell"
+                else:
+                    content = render_other_cell(other_groups.get(d, []))
+                    css_class = "cell other-cell"
+
+                grid.append(f'<div class="{css_class}">{content}</div>')
+
+        st.markdown(
+            f'<div class="schedule-grid schedule-body-grid" '
+            f'style="grid-template-columns:minmax(105px,.8fr) repeat({len(days)},minmax(135px,1fr));">'
+            + ''.join(grid) + '</div>',
+            unsafe_allow_html=True,
+        )
 
 
 
