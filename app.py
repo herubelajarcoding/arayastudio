@@ -1013,6 +1013,112 @@ st.markdown(
 )
 
 
+# V8e final schedule continuity fix.
+st.markdown(
+    """
+    <style>
+    /* Scope to one weekly schedule container. */
+    div[data-testid="stVerticalBlock"]:has(.v8e-week-shell-marker) {
+        position:relative !important;
+        gap:0 !important;
+        row-gap:0 !important;
+        padding:0 !important;
+    }
+
+    /* Streamlit wraps every markdown/button row in stElementContainer.
+       Remove spacing from the visible schedule pieces. */
+    div[data-testid="stElementContainer"]:has(.v8e-week-shell-marker),
+    div[data-testid="stElementContainer"]:has(.week-title),
+    div[data-testid="stElementContainer"]:has(.schedule-header-grid),
+    div[data-testid="stElementContainer"]:has(.schedule-body-grid) {
+        margin:0 !important;
+        padding:0 !important;
+    }
+
+    div[data-testid="stElementContainer"]:has(.v8e-week-shell-marker) {
+        height:0 !important;
+        min-height:0 !important;
+        overflow:visible !important;
+    }
+
+    /* THIS is the important fix:
+       remove the whole invisible date-button row from normal flow.
+       It is absolutely positioned over the date header instead. */
+    div[data-testid="stVerticalBlock"]:has(.v8e-week-shell-marker)
+      > div[data-testid="stElementContainer"]:has([class*="st-key-v8e_date_"]) {
+        position:absolute !important;
+        left:0 !important;
+        right:0 !important;
+        top:58px !important;
+        width:100% !important;
+        height:58px !important;
+        min-height:58px !important;
+        margin:0 !important;
+        padding:0 !important;
+        z-index:20 !important;
+        overflow:visible !important;
+        pointer-events:auto !important;
+    }
+
+    /* Depending on Streamlit DOM nesting, the date row can be one wrapper
+       deeper. Cover that layout too without reserving any vertical space. */
+    div[data-testid="stElementContainer"]:has(
+        div[data-testid="stHorizontalBlock"] [class*="st-key-v8e_date_"]
+    ) {
+        position:absolute !important;
+        left:0 !important;
+        right:0 !important;
+        width:100% !important;
+        height:58px !important;
+        min-height:58px !important;
+        margin:0 !important;
+        padding:0 !important;
+        z-index:20 !important;
+        overflow:visible !important;
+    }
+
+    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
+        transform:none !important;
+        height:58px !important;
+        min-height:58px !important;
+        margin:0 !important;
+        padding:0 !important;
+        gap:0 !important;
+    }
+
+    /* Visible pieces now touch each other exactly. */
+    .week-title {
+        margin:0 !important;
+        border-radius:8px 8px 0 0 !important;
+    }
+
+    .schedule-header-grid {
+        margin:0 !important;
+        border-radius:0 !important;
+    }
+
+    .schedule-body-grid {
+        margin:0 !important;
+        border-top:0 !important;
+        border-radius:0 0 8px 8px !important;
+    }
+
+    /* Ensure ACTIVITY label stays visible in the first header cell. */
+    .schedule-header-grid .activity-head {
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        color:#172B4D !important;
+        font-weight:800 !important;
+        opacity:1 !important;
+        visibility:visible !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ============================================================
 # DATABASE
 # ============================================================
