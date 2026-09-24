@@ -883,28 +883,78 @@ st.markdown(
         margin:.15rem 0 .35rem;
         color:var(--st-text-color, inherit);
     }
+    /* Weekly date header: visually identical to the original V8d HTML
+       schedule header, but still powered by native Streamlit buttons. */
     .v8e-activity-head {
+        height:58px;
         min-height:58px;
         display:flex;
         align-items:center;
         justify-content:center;
+        box-sizing:border-box;
+        padding:.45rem .30rem;
+        font-size:.92rem;
         font-weight:800;
         color:#172B4D;
         background:#F8FAFC;
-        border:1px solid #EAECF0;
-        box-sizing:border-box;
+        border-top:1px solid #EAECF0;
+        border-left:1px solid #EAECF0;
+        border-right:1px solid #EAECF0;
+        border-bottom:1px solid #D0D5DD;
     }
+
     [class*="st-key-v8e_date_"] button {
-        min-height:58px !important;
         height:58px !important;
+        min-height:58px !important;
+        width:100% !important;
         border-radius:0 !important;
-        font-weight:750 !important;
-        padding:.35rem .25rem !important;
+        padding:.35rem .30rem !important;
+        margin:0 !important;
+        background:#F8FAFC !important;
+        border-top:1px solid #EAECF0 !important;
+        border-left:0 !important;
+        border-right:1px solid #EAECF0 !important;
+        border-bottom:1px solid #D0D5DD !important;
         box-shadow:none !important;
+        color:#667085 !important;
     }
+
+    [class*="st-key-v8e_date_"] button:hover {
+        background:#EEF4FF !important;
+        border-color:#D0D5DD !important;
+    }
+
     [class*="st-key-v8e_date_"] button p {
-        font-size:.82rem !important;
-        line-height:1.15 !important;
+        margin:0 !important;
+        white-space:pre-line !important;
+        text-align:center !important;
+        font-size:.72rem !important;
+        line-height:1.20 !important;
+        font-weight:700 !important;
+        color:#667085 !important;
+        text-transform:uppercase !important;
+    }
+
+    [class*="st-key-v8e_date_"] button p strong {
+        display:block !important;
+        margin-top:.18rem !important;
+        font-size:1rem !important;
+        line-height:1.05 !important;
+        font-weight:800 !important;
+        color:#101828 !important;
+        text-transform:none !important;
+    }
+
+    /* Remove Streamlit's normal vertical widget gap so the header again
+       visually joins the schedule table underneath, as in V8d. */
+    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
+        gap:0 !important;
+        margin-bottom:-.78rem !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"])
+        > div[data-testid="stColumn"] {
+        padding-left:0 !important;
+        padding-right:0 !important;
     }
     </style>
     """,
@@ -1924,17 +1974,40 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
         )
 
     clicked_date=None
+    non_working_keys=[]
     for idx,d in enumerate(days):
         is_non_working,holiday_label=holiday_info(d)
         title=holiday_label if holiday_label else d.strftime("%d %b %Y")
+        if is_non_working:
+            non_working_keys.append(f"v8e_date_{week_no}_{d.isoformat()}")
         with header_cols[idx+1]:
             if st.button(
-                f"{fmt_day(d).upper()} · {d.strftime('%d %b')}",
+                f"{fmt_day(d).upper()}  \n**{d.strftime('%d %b')}**",
                 key=f"v8e_date_{week_no}_{d.isoformat()}",
                 help=f"Open all activities • {title}",
                 use_container_width=True,
             ):
                 clicked_date=d
+
+    if non_working_keys:
+        holiday_css="".join(
+            f"""
+            [class*="st-key-{key}"] button {{
+                background:#ECFDF3 !important;
+                border-color:#ABEFC6 !important;
+            }}
+            [class*="st-key-{key}"] button p,
+            [class*="st-key-{key}"] button p strong {{
+                color:#067647 !important;
+                font-weight:800 !important;
+            }}
+            [class*="st-key-{key}"] button:hover {{
+                background:#D1FADF !important;
+            }}
+            """
+            for key in non_working_keys
+        )
+        st.markdown(f"<style>{holiday_css}</style>",unsafe_allow_html=True)
 
     if clicked_date is not None:
         show_date_detail(
