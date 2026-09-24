@@ -2095,9 +2095,14 @@ def render_meeting_cell(rows):
             ]
             attendees = ", ".join([a.upper() for a in attendees if a])
 
+            agenda_notes=clean(row.get("agenda_notes"))
+            meeting_title=html.escape(clean(row.get("meeting_type")))
+            if agenda_notes:
+                meeting_title += " - " + html.escape(agenda_notes)
+
             chunks.append(
                 '<div class="task">• '
-                + html.escape(clean(row.get("meeting_type")))
+                + meeting_title
                 + '</div>'
             )
             chunks.append(
@@ -2110,6 +2115,7 @@ def render_meeting_cell(rows):
             chunks.append(
                 f'<div class="meta">Location: {html.escape(clean(row.get("location")))}</div>'
             )
+
 
         if hidden_meeting_count:
             chunks.append(
