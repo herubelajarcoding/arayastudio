@@ -13,6 +13,11 @@ try:
     import psycopg2
 except ImportError:
     psycopg2 = None
+
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:
+    ConnectionPool = None
 from pathlib import Path
 from datetime import date, datetime, time, timedelta
 import calendar
@@ -538,6 +543,31 @@ def using_postgres():
     return bool(_database_url())
 
 
+@st.cache_resource(show_spinner=False)
+def _postgres_pool():
+    """Shared client-side connection pool for PostgreSQL/Supabase.
+
+    Streamlit reruns the script frequently. Reusing established connections
+    avoids a new TLS/database handshake for every small query.
+    """
+    url=_database_url()
+    if not url or psycopg is None or ConnectionPool is None:
+        return None
+
+    pool=ConnectionPool(
+        conninfo=url,
+        min_size=1,
+        max_size=6,
+        timeout=15,
+        max_idle=300,
+        max_lifetime=1800,
+        kwargs={"sslmode":"require"},
+        open=True,
+    )
+    pool.wait(timeout=15)
+    return pool
+
+
 def _translate_sql_for_postgres(sql):
     """Translate the small SQLite syntax subset used by this app to PostgreSQL."""
     s = sql
@@ -588,9 +618,11 @@ class _PGCursor:
 
 
 class _PGConnection:
-    """Tiny DB-API compatibility layer so existing V6 SQL can use PostgreSQL."""
-    def __init__(self, conn):
+    """DB-API compatibility wrapper with pool-aware close semantics."""
+    def __init__(self, conn, pool=None):
         self._conn = conn
+        self._pool = pool
+        self._released = False
 
     def cursor(self):
         return _PGCursor(self._conn.cursor())
@@ -615,22 +647,42 @@ class _PGConnection:
         self._conn.rollback()
 
     def close(self):
-        self._conn.close()
+        if self._released:
+            return
+        self._released = True
+
+        # A SELECT can leave a transaction open. Reset it before returning the
+        # connection to the shared pool so the next request starts cleanly.
+        try:
+            self._conn.rollback()
+        except Exception:
+            pass
+
+        if self._pool is not None:
+            self._pool.putconn(self._conn)
+        else:
+            self._conn.close()
 
 
 def get_conn():
     """Use PostgreSQL when DATABASE_URL is configured; SQLite is local fallback."""
     url = _database_url()
     if url:
+        pool=_postgres_pool()
+        if pool is not None:
+            raw=pool.getconn(timeout=15)
+            return _PGConnection(raw,pool=pool)
+
+        # Fallback only when the pool package is unavailable.
         if psycopg is not None:
-            raw = psycopg.connect(url, sslmode="require")
+            raw=psycopg.connect(url,sslmode="require")
             return _PGConnection(raw)
         if psycopg2 is not None:
-            raw = psycopg2.connect(url, sslmode="require")
+            raw=psycopg2.connect(url,sslmode="require")
             return _PGConnection(raw)
         raise RuntimeError(
             "DATABASE_URL sudah diisi tetapi PostgreSQL driver belum tersedia. "
-            "Pastikan requirements.txt memuat psycopg[binary]."
+            "Pastikan requirements.txt memuat psycopg[binary,pool]."
         )
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -2047,6 +2099,7 @@ def init_master_database():
 
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_master_table(name):
     conn = get_conn()
     df = pd.read_sql_query(f"SELECT * FROM master_{name} ORDER BY id", conn)
@@ -2107,6 +2160,18 @@ def _crud_duplicate(table, fields, values, exclude_id=None):
     return found is not None
 
 
+def _clear_master_caches():
+    """Invalidate Setup master caches after Add/Edit/Delete."""
+    try:
+        master_values.clear()
+    except Exception:
+        pass
+    try:
+        get_master_table.clear()
+    except Exception:
+        pass
+
+
 def _crud_add(table, fields, values):
     if _crud_duplicate(table, fields, values):
         return False, "Data yang sama sudah ada."
@@ -2118,6 +2183,7 @@ def _crud_add(table, fields, values):
     )
     conn.commit()
     conn.close()
+    _clear_master_caches()
     return True, "Data berhasil ditambahkan."
 
 
@@ -2132,6 +2198,7 @@ def _crud_update(table, fields, row_id, values):
     )
     conn.commit()
     conn.close()
+    _clear_master_caches()
     return True, "Data berhasil diperbarui."
 
 
@@ -2140,6 +2207,7 @@ def _crud_delete(table, row_id):
     conn.execute(f"DELETE FROM master_{table} WHERE id=?", (row_id,))
     conn.commit()
     conn.close()
+    _clear_master_caches()
     return True, "Data berhasil dihapus."
 
 
@@ -2210,6 +2278,7 @@ def setup_page():
 # from the Setup master tables, so Setup CRUD changes propagate
 # automatically to these forms.
 
+@st.cache_data(ttl=300, show_spinner=False)
 def master_values(table, field):
     conn = get_conn()
     try:
@@ -3905,7 +3974,6 @@ def freelance_mapping_df():
 
 
 def input_freelance_mapping_page():
-    ensure_freelance_mapping_schema()
     st.markdown('<div class="app-title">Freelance Project Mapping</div>',unsafe_allow_html=True)
     st.markdown("Map each freelance team member to one or more active projects.")
 
@@ -4062,7 +4130,6 @@ def input_freelance_mapping_page():
 
 
 def input_data_page(submodule):
-    ensure_v4_input_schema()
     if submodule=="Input Team":
         input_team_page()
     elif submodule=="Input Project":
@@ -4168,10 +4235,17 @@ if st.sidebar.button(
     st.session_state.v3b_setup_submodule = "Setup Manager"
     st.rerun()
 
-init_db()
-init_master_database()
-ensure_v4_input_schema()
-ensure_freelance_mapping_schema()
+@st.cache_resource(show_spinner=False)
+def _initialize_database_once():
+    """Create/migrate database objects once per app process instead of every rerun."""
+    init_db()
+    init_master_database()
+    ensure_v4_input_schema()
+    ensure_freelance_mapping_schema()
+    return True
+
+
+_initialize_database_once()
 
 module = st.session_state.v3a_module
 
