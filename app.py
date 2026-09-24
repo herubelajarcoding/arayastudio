@@ -324,8 +324,19 @@ st.markdown(
         line-height: 1.3;
     }
     .other-item {
-        font-size: 0.79rem;
-        padding: 0.2rem 0;
+        font-size: 0.88rem;
+        line-height: 1.42;
+        font-weight: 700;
+        color:#172B4D;
+        padding: 0.26rem 0;
+    }
+    .other-item .meta {
+        margin-left: 1.05rem;
+        margin-top: 0.12rem;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        font-weight: 600;
+        color:#475467;
     }
     .empty {color:#98A2B3; font-size:.72rem;}
         /* V2n: visual separator between project groups in the dashboard. */
@@ -1537,7 +1548,7 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
         grid.append(
             f'<div class="schedule-head{holiday_class}">'
             f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" target="_self" '
-            f'title="{html.escape(title)}">'
+            f'title="Open all activities • {html.escape(title)}">'
             f'<div class="dow">{fmt_day(d)}</div>'
             f'<div class="day">{d.strftime("%d %b")}</div>'
             f'</a></div>'
@@ -1862,17 +1873,37 @@ def weekly_dashboard():
     projects = get_projects()
     project_options = (["All"] + projects["id"].tolist()) if not projects.empty else ["All"]
 
-    # Date-detail overlay: clicking a date opens a modal on the same page.
+    # Date-detail overlay.
+    #
+    # The dashboard calendar itself is rendered as HTML, so clicking a date
+    # changes the URL query string. Treat that query string only as a one-time
+    # trigger: copy the clicked date into Session State, restore the dashboard
+    # month/year from that date, clear the URL, then rerun once. On the next
+    # run the dialog opens from Session State without resetting to today's
+    # month and it will not reopen after the user closes it.
     detail_date_value = st.query_params.get("detail_date")
-    detail_date = None
     if detail_date_value:
         try:
-            detail_date = parse_date(detail_date_value)
+            clicked_date = parse_date(detail_date_value)
+            st.session_state["dash_month"] = clicked_date.month
+            st.session_state["dash_year"] = clicked_date.year
+            st.session_state["dash_detail_pending"] = clicked_date.isoformat()
+        except Exception:
+            st.session_state.pop("dash_detail_pending", None)
+
+        # Do not use pop() here. Query-param mutation can itself trigger a
+        # rerun; clearing after state has been captured makes the transition
+        # deterministic.
+        st.query_params.clear()
+        st.rerun()
+
+    detail_date = None
+    pending_detail = st.session_state.pop("dash_detail_pending", None)
+    if pending_detail:
+        try:
+            detail_date = parse_date(pending_detail)
         except Exception:
             detail_date = None
-        # Remove the trigger so closing the dialog does not make it reopen
-        # on the next Streamlit rerun.
-        st.query_params.pop("detail_date", None)
 
     # Calendar range is derived from data + current year; no Setup entry needed.
     conn = get_conn()
