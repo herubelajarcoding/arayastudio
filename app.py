@@ -1,6 +1,13 @@
 DB_VERSION = 'V3b_v4'
 
 import sqlite3
+import os
+import re
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 from pathlib import Path
 from datetime import date, datetime, time, timedelta
 import calendar
@@ -27,6 +34,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Persistent database mode:
+# - DATABASE_URL configured -> PostgreSQL/Supabase, persistent across redeploys.
+# - no DATABASE_URL -> local SQLite fallback (development only).
 
 
 # ============================================================
@@ -508,7 +519,112 @@ st.markdown(
 # DATABASE
 # ============================================================
 
+
+def _database_url():
+    """Read persistent PostgreSQL URL from Streamlit Secrets or environment."""
+    try:
+        url = st.secrets.get("DATABASE_URL", "")
+    except Exception:
+        url = ""
+    return clean(url or os.getenv("DATABASE_URL", ""))
+
+
+def using_postgres():
+    return bool(_database_url())
+
+
+def _translate_sql_for_postgres(sql):
+    """Translate the small SQLite syntax subset used by this app to PostgreSQL."""
+    s = sql
+    s = s.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+    s = re.sub(
+        r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT",
+        "SERIAL PRIMARY KEY",
+        s,
+        flags=re.I,
+    )
+    s = re.sub(r"\bAUTOINCREMENT\b", "", s, flags=re.I)
+    # qmark -> psycopg2 format. The application SQL does not use literal '?'.
+    s = s.replace("?", "%s")
+    return s
+
+
+class _PGCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def execute(self, sql, params=None):
+        translated = _translate_sql_for_postgres(sql)
+        # SQLite's INSERT OR IGNORE is used only for seed operations.
+        if "INSERT OR IGNORE INTO" in sql.upper():
+            translated = _translate_sql_for_postgres(
+                re.sub(r"INSERT\s+OR\s+IGNORE\s+INTO", "INSERT INTO", sql, flags=re.I)
+            )
+            translated = translated.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+        self._cursor.execute(translated, params or ())
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def close(self):
+        self._cursor.close()
+
+
+class _PGConnection:
+    """Tiny DB-API compatibility layer so existing V6 SQL can use PostgreSQL."""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return _PGCursor(self._conn.cursor())
+
+    def execute(self, sql, params=None):
+        cur = self.cursor()
+        return cur.execute(sql, params)
+
+    def executescript(self, script):
+        cur = self.cursor()
+        # Schema script contains no procedural SQL; splitting on semicolons is safe.
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                cur.execute(stmt)
+        cur.close()
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
 def get_conn():
+    """Use PostgreSQL when DATABASE_URL is configured; SQLite is local fallback."""
+    url = _database_url()
+    if url:
+        if psycopg2 is None:
+            raise RuntimeError(
+                "DATABASE_URL sudah diisi tetapi psycopg2 belum tersedia. "
+                "Pastikan psycopg2-binary ada di requirements.txt."
+            )
+        raw = psycopg2.connect(url, sslmode="require")
+        return _PGConnection(raw)
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -516,11 +632,36 @@ def get_conn():
 
 
 def table_exists(conn, name):
+    if using_postgres():
+        return conn.execute(
+            """SELECT 1 FROM information_schema.tables
+               WHERE table_schema='public' AND table_name=?""",
+            (name,),
+        ).fetchone() is not None
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
         (name,),
     ).fetchone() is not None
 
+
+def table_columns(conn, name):
+    """Return {column_name: {'notnull': bool}} for SQLite or PostgreSQL."""
+    if using_postgres():
+        rows = conn.execute(
+            """SELECT column_name, is_nullable
+               FROM information_schema.columns
+               WHERE table_schema='public' AND table_name=?
+               ORDER BY ordinal_position""",
+            (name,),
+        ).fetchall()
+        return {r[0]: {"notnull": str(r[1]).upper()=="NO"} for r in rows}
+    rows = conn.execute(f"PRAGMA table_info({name})").fetchall()
+    return {r[1]: {"notnull": bool(r[3])} for r in rows}
+
+
+DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+if psycopg2 is not None:
+    DB_INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg2.IntegrityError)
 
 def init_db():
     conn = get_conn()
@@ -1820,12 +1961,12 @@ SETUP_FILE = "SETUP.xlsx"
 
 
 def init_master_database():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     cur = conn.cursor()
 
     # Migration safety: remove incompatible old master schema
     try:
-        cols = [r[1] for r in cur.execute("PRAGMA table_info(master_role)").fetchall()]
+        cols = table_columns(conn, "master_role")
         if cols and "role" not in cols:
             for t in ["role","project_type","project_status","meeting_type","meeting_location","activity_type","priority","mapping_status","task_status","phase","project_size","workload_status"]:
                 cur.execute(f"DROP TABLE IF EXISTS master_{t}")
@@ -1896,7 +2037,7 @@ def init_master_database():
 
 
 def get_master_table(name):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     df = pd.read_sql_query(f"SELECT * FROM master_{name} ORDER BY id", conn)
     conn.close()
     return df
@@ -1943,7 +2084,7 @@ def _crud_values(spec, prefix, row=None):
 
 
 def _crud_duplicate(table, fields, values, exclude_id=None):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     where = " AND ".join(f"{f}=?" for f, _, _ in fields)
     params = [values[f] for f, _, _ in fields]
     sql = f"SELECT id FROM master_{table} WHERE {where}"
@@ -1959,7 +2100,7 @@ def _crud_add(table, fields, values):
     if _crud_duplicate(table, fields, values):
         return False, "Data yang sama sudah ada."
     names = [f for f, _, _ in fields]
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     conn.execute(
         f"INSERT INTO master_{table} ({','.join(names)}) VALUES ({','.join('?' for _ in names)})",
         [values[n] for n in names],
@@ -1973,7 +2114,7 @@ def _crud_update(table, fields, row_id, values):
     if _crud_duplicate(table, fields, values, row_id):
         return False, "Data yang sama sudah ada."
     names = [f for f, _, _ in fields]
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     conn.execute(
         f"UPDATE master_{table} SET {','.join(f'{n}=?' for n in names)} WHERE id=?",
         [values[n] for n in names] + [row_id],
@@ -1984,7 +2125,7 @@ def _crud_update(table, fields, row_id, values):
 
 
 def _crud_delete(table, row_id):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_conn()
     conn.execute(f"DELETE FROM master_{table} WHERE id=?", (row_id,))
     conn.commit()
     conn.close()
@@ -2226,7 +2367,7 @@ def _add_team():
             conn.commit()
             st.success("Team member berhasil ditambahkan.")
             st.rerun()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             st.error("Staff Name sudah ada.")
         finally:
             conn.close()
@@ -2330,7 +2471,7 @@ def _edit_team(df):
             conn.commit()
             st.success("Data berhasil diperbarui.")
             st.rerun()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             st.error("Staff Name sudah digunakan.")
         finally:
             conn.close()
@@ -2368,7 +2509,7 @@ def _delete_team(df):
             conn.commit()
             st.success("Team member benar-benar dihapus dari database.")
             st.rerun()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             conn.rollback()
             st.error("Staff masih digunakan oleh data lain dan tidak dapat dihapus.")
         finally:
@@ -2641,7 +2782,7 @@ def _import_team_excel():
             st.session_state["v4c_team_import_success"] = len(valid_rows)
             st.session_state["v4c_team_import_file"] = uploaded.name
             st.rerun()
-        except sqlite3.IntegrityError as exc:
+        except DB_INTEGRITY_ERRORS as exc:
             conn.rollback()
             st.error(f"Import dibatalkan karena konflik database: {exc}")
         finally:
@@ -2728,7 +2869,7 @@ def _add_project():
             conn.commit()
             st.success(f"Project {pid} berhasil ditambahkan.")
             st.rerun()
-        except sqlite3.IntegrityError as exc:
+        except DB_INTEGRITY_ERRORS as exc:
             conn.rollback()
             st.error(f"Project gagal ditambahkan: {exc}")
         finally:
@@ -3033,7 +3174,7 @@ def _import_project_excel():
             st.session_state["v5_project_import_success"]=len(valid_rows)
             st.session_state["v5_project_import_file"]=uploaded.name
             st.rerun()
-        except sqlite3.IntegrityError as exc:
+        except DB_INTEGRITY_ERRORS as exc:
             conn.rollback()
             st.error(f"Import dibatalkan karena konflik database: {exc}")
         finally:
@@ -3080,6 +3221,272 @@ def _allocation_df():
     """)
 
 
+
+def _allocation_import_template():
+    """Excel template matching the Staff Allocation input fields."""
+    sample=pd.DataFrame([{
+        "Project ID":"P001",
+        "Phase":"Concept",
+        "Staff":"Example Staff",
+        "Role on Project":"Architect",
+        "Notes":"",
+    }])
+    bio=BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        sample.to_excel(writer,index=False,sheet_name="Staff Allocation Import")
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def _import_allocation_excel():
+    st.markdown("### Import Staff Allocation from Excel")
+    st.caption(
+        "Upload Excel untuk merekam banyak Staff Allocation sekaligus. "
+        "Kolom Excel dapat memiliki nama berbeda dan akan dipetakan ke field Staff Allocation."
+    )
+
+    st.download_button(
+        "Download Excel Template",
+        data=_allocation_import_template(),
+        file_name="Staff_Allocation_Import_Template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="v6_allocation_template",
+    )
+
+    uploaded=st.file_uploader(
+        "Upload Excel",
+        type=["xlsx","xlsm"],
+        key="v6_allocation_excel",
+    )
+
+    imported_count=st.session_state.pop("v6_allocation_import_success",None)
+    if imported_count is not None:
+        imported_file=st.session_state.pop("v6_allocation_import_file","")
+        st.success(
+            f"Import berhasil. {imported_count} Staff Allocation "
+            f"berhasil direkam ke database."
+        )
+        if imported_file:
+            st.caption(f"File: {imported_file}")
+        return
+
+    if uploaded is None:
+        return
+
+    try:
+        xls=pd.ExcelFile(uploaded)
+        sheet=st.selectbox(
+            "Sheet",xls.sheet_names,key="v6_allocation_import_sheet"
+        )
+        raw=pd.read_excel(uploaded,sheet_name=sheet,engine="openpyxl")
+    except Exception as exc:
+        st.error(f"Excel tidak dapat dibaca: {exc}")
+        return
+
+    if raw.empty:
+        st.warning("Sheet tidak memiliki data.")
+        return
+    raw=raw.dropna(how="all").copy()
+    if raw.empty:
+        st.warning("Tidak ada baris data.")
+        return
+
+    st.markdown("#### 1. Mapping Kolom Excel")
+    source_cols=[str(c) for c in raw.columns]
+    target_fields=[
+        ("project_id","Project ID *"),
+        ("phase","Phase *"),
+        ("staff","Staff *"),
+        ("role_on_project","Role on Project"),
+        ("notes","Notes"),
+    ]
+
+    norm={_normalize_import_header(c):c for c in source_cols}
+    aliases={
+        "project_id":["projectid","project","idproject","projectcode","kodeproject"],
+        "phase":["phase","tahap","projectphase"],
+        "staff":["staff","staffname","name","team","teammember","member"],
+        "role_on_project":["roleonproject","projectrole","role","peran"],
+        "notes":["notes","note","catatan","remark","remarks"],
+    }
+
+    mapping={}
+    options=["— Not mapped —"]+source_cols
+    for target,label in target_fields:
+        guess="— Not mapped —"
+        for a in aliases[target]:
+            if a in norm:
+                guess=norm[a]
+                break
+        default=options.index(guess) if guess in options else 0
+        mapping[target]=st.selectbox(
+            label,options,index=default,key=f"v6_alloc_map_{target}"
+        )
+
+    required_missing=[
+        label for target,label in target_fields[:3]
+        if mapping[target]=="— Not mapped —"
+    ]
+    if required_missing:
+        st.warning("Field wajib belum dipetakan: "+", ".join(required_missing))
+        return
+
+    st.markdown("#### 2. Preview Hasil Mapping")
+    mapped=pd.DataFrame(index=raw.index)
+    for target,label in target_fields:
+        src_col=mapping[target]
+        mapped[label.replace(" *","")]=(
+            raw[src_col] if src_col!="— Not mapped —" else None
+        )
+    st.dataframe(mapped.head(20),use_container_width=True,hide_index=True)
+    st.caption(f"{len(mapped)} baris siap divalidasi.")
+
+    projects=_project_options()
+    phases=master_values("phase","phase")
+    roles=master_values("role","role")
+    staff_df=_staff_options()
+
+    project_lookup={
+        clean(r["id"]).lower():clean(r["id"])
+        for _,r in projects.iterrows()
+    }
+    phase_lookup={clean(x).lower():x for x in phases}
+    role_lookup={clean(x).lower():x for x in roles}
+    staff_lookup={clean(r["name"]).lower():clean(r["name"])
+                  for _,r in staff_df.iterrows()}
+
+    existing=set(
+        (clean(r["project_id"]).lower(),
+         clean(r["phase"]).lower(),
+         clean(r["staff"]).lower())
+        for _,r in _allocation_df().iterrows()
+    )
+
+    valid_rows=[]
+    errors=[]
+
+    def cell_text(target,row):
+        src_col=mapping[target]
+        return "" if src_col=="— Not mapped —" else clean(row[src_col])
+
+    for ix,row in raw.iterrows():
+        pid_raw=cell_text("project_id",row)
+        phase_raw=cell_text("phase",row)
+        staff_raw=cell_text("staff",row)
+        role_raw=cell_text("role_on_project",row)
+        notes=cell_text("notes",row)
+
+        if not pid_raw:
+            errors.append(f"Baris Excel {ix+2}: Project ID kosong.")
+            continue
+        pid=project_lookup.get(pid_raw.lower())
+        if not pid:
+            errors.append(
+                f"Baris Excel {ix+2}: Project ID '{pid_raw}' tidak tersedia "
+                f"sebagai Project Active."
+            )
+            continue
+
+        if not phase_raw:
+            errors.append(f"Baris Excel {ix+2}: Phase kosong.")
+            continue
+        phase=phase_lookup.get(phase_raw.lower())
+        if not phase:
+            errors.append(
+                f"Baris Excel {ix+2}: Phase '{phase_raw}' tidak ada di Setup."
+            )
+            continue
+
+        if not staff_raw:
+            errors.append(f"Baris Excel {ix+2}: Staff kosong.")
+            continue
+        staff=staff_lookup.get(staff_raw.lower())
+        if not staff:
+            errors.append(
+                f"Baris Excel {ix+2}: Staff '{staff_raw}' tidak tersedia "
+                f"pada Team Active."
+            )
+            continue
+
+        role=None
+        if role_raw:
+            role=role_lookup.get(role_raw.lower())
+            if not role:
+                errors.append(
+                    f"Baris Excel {ix+2}: Role on Project '{role_raw}' "
+                    f"tidak ada di Setup."
+                )
+                continue
+
+        key=(pid.lower(),phase.lower(),staff.lower())
+        if key in existing or any(
+            (r["project_id"].lower(),r["phase"].lower(),r["staff"].lower())==key
+            for r in valid_rows
+        ):
+            errors.append(
+                f"Baris Excel {ix+2}: Staff '{staff}' sudah dialokasikan "
+                f"pada project '{pid}' dan phase '{phase}'."
+            )
+            continue
+
+        valid_rows.append({
+            "project_id":pid,
+            "phase":phase,
+            "staff":staff,
+            "role_on_project":role,
+            "notes":notes,
+        })
+
+    if errors:
+        st.error(f"Ditemukan {len(errors)} masalah. Tidak ada data yang direkam.")
+        st.dataframe(
+            pd.DataFrame({"Validation Error":errors}),
+            use_container_width=True,
+            hide_index=True,
+        )
+        return
+
+    import_preview=pd.DataFrame([{
+        "Project ID":r["project_id"],
+        "Project Name":_project_name(r["project_id"]),
+        "Phase":r["phase"],
+        "Staff":r["staff"],
+        "Role on Project":r["role_on_project"],
+        "Notes":r["notes"],
+    } for r in valid_rows])
+
+    st.success(f"{len(valid_rows)} baris lolos validasi dan siap direkam.")
+    st.dataframe(
+        import_preview,use_container_width=True,hide_index=True
+    )
+
+    if st.button(
+        "Save Imported Staff Allocation Data",
+        type="primary",
+        use_container_width=True,
+        key="v6_allocation_import_save",
+    ):
+        conn=get_conn()
+        try:
+            for r in valid_rows:
+                conn.execute(
+                    """INSERT INTO staff_allocation
+                       (project_id,phase,staff,role_on_project,notes)
+                       VALUES (?,?,?,?,?)""",
+                    (r["project_id"],r["phase"],r["staff"],
+                     r["role_on_project"],r["notes"])
+                )
+            conn.commit()
+            st.session_state["v6_allocation_import_success"]=len(valid_rows)
+            st.session_state["v6_allocation_import_file"]=uploaded.name
+            st.rerun()
+        except DB_INTEGRITY_ERRORS as exc:
+            conn.rollback()
+            st.error(f"Import dibatalkan karena konflik database: {exc}")
+        finally:
+            conn.close()
+
+
 def _add_allocation():
     projects=_project_options()
     staff=_staff_options()
@@ -3108,7 +3515,7 @@ def _add_allocation():
             conn.execute("""INSERT INTO staff_allocation(project_id,phase,staff,role_on_project,notes)
                             VALUES (?,?,?,?,?)""",(pid,phase,person,role,notes))
             conn.commit(); st.success("Staff allocation berhasil ditambahkan."); st.rerun()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             st.error("Staff tersebut sudah dialokasikan pada project dan phase yang sama.")
         finally: conn.close()
 
@@ -3133,7 +3540,7 @@ def _edit_allocation(df):
             conn.execute("""UPDATE staff_allocation SET project_id=?,phase=?,staff=?,role_on_project=?,notes=? WHERE id=?""",
                          (pid,phase,person,role,notes,int(rid)))
             conn.commit(); st.success("Allocation diperbarui."); st.rerun()
-        except sqlite3.IntegrityError: st.error("Allocation yang sama sudah ada.")
+        except DB_INTEGRITY_ERRORS: st.error("Allocation yang sama sudah ada.")
         finally: conn.close()
 
 
@@ -3152,10 +3559,11 @@ def input_allocation_page():
     df=_allocation_df()
     display=df.copy()
     st.dataframe(display.drop(columns=["id"]),use_container_width=True,hide_index=True)
-    a,e,d=st.tabs(["＋ Add","✎ Edit","🗑 Delete"])
+    a,e,d,i=st.tabs(["＋ Add","✎ Edit","🗑 Delete","⇧ Import Excel"])
     with a:_add_allocation()
     with e:_edit_allocation(df)
     with d:_delete_allocation(df)
+    with i:_import_allocation_excel()
 
 
 def _work_df():
@@ -3401,9 +3809,8 @@ def ensure_freelance_mapping_schema():
     """
     conn=get_conn()
     try:
-        info=conn.execute(
-            "PRAGMA table_info(freelance_project_mapping)"
-        ).fetchall()
+        info_map=table_columns(conn, "freelance_project_mapping")
+        info=list(info_map)
 
         if not info:
             conn.execute("""
@@ -3416,12 +3823,12 @@ def ensure_freelance_mapping_schema():
                 )
             """)
         else:
-            cols={r[1]:r for r in info}
+            cols={name: {"notnull": meta["notnull"]} for name,meta in info_map.items()}
             # Legacy versions had start_date/end_date/notes. If any of those
             # are NOT NULL, SQLite requires a migration because the new UI
             # intentionally does not provide those fields.
             legacy_required=any(
-                name in cols and int(cols[name][3])==1
+                name in cols and bool(cols[name]["notnull"])
                 for name in ("start_date","end_date","notes")
             )
             if legacy_required:
@@ -3457,7 +3864,7 @@ def ensure_freelance_mapping_schema():
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_freelance_project_pair
                 ON freelance_project_mapping(freelancer, project_id)
             """)
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERRORS:
             # Keep existing duplicate legacy rows; application-level checks
             # prevent creating new duplicates.
             pass
@@ -3560,7 +3967,7 @@ def input_freelance_mapping_page():
                             conn.commit()
                             st.success("Freelance project mapping berhasil ditambahkan.")
                             st.rerun()
-                    except sqlite3.IntegrityError as exc:
+                    except DB_INTEGRITY_ERRORS as exc:
                         conn.rollback()
                         st.error(f"Mapping gagal disimpan: {exc}")
                     finally:
@@ -3615,7 +4022,7 @@ def input_freelance_mapping_page():
                             conn.commit()
                             st.success("Mapping berhasil diperbarui.")
                             st.rerun()
-                        except sqlite3.IntegrityError as exc:
+                        except DB_INTEGRITY_ERRORS as exc:
                             conn.rollback()
                             st.error(f"Mapping gagal diperbarui: {exc}")
                         finally:
@@ -3687,6 +4094,14 @@ st.sidebar.markdown(
     '<div class="v3-nav-label">MODULE</div>',
     unsafe_allow_html=True,
 )
+
+if using_postgres():
+    st.sidebar.success("Database: Persistent PostgreSQL")
+else:
+    st.sidebar.warning(
+        "Database: Local SQLite\n\n"
+        "Data dapat hilang saat redeploy. Isi DATABASE_URL di Streamlit Secrets."
+    )
 
 # ------------------------------------------------------------
 # MODULE: DASHBOARD
