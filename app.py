@@ -2661,10 +2661,15 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
                     ]
                     attendees = ", ".join(a.upper() for a in attendees if a)
 
+                    meeting_title=html.escape(clean(row.get("meeting_type")))
+                    agenda_notes=clean(row.get("agenda_notes"))
+                    if agenda_notes:
+                        meeting_title += " - " + html.escape(agenda_notes)
+
                     html_parts.append(
                         f'<div class="detail-meeting-item">'
                         f'<div class="detail-task"><span class="detail-bullet">•</span> '
-                        f'{html.escape(clean(row.get("meeting_type")))}</div>'
+                        f'{meeting_title}</div>'
                         f'<div class="detail-meta"><b>PIC:</b> {html.escape(attendees) or "—"}</div>'
                         f'<div class="detail-meta"><b>Time:</b> '
                         f'{html.escape(clean(row.get("start_time")))} – '
