@@ -28,6 +28,7 @@ import re
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     from reportlab.lib import colors
@@ -873,122 +874,103 @@ st.markdown(
 )
 
 
-# V8e weekly header + touch-date styling.
+
+# ============================================================
+# V8e CLIENT BRIDGE — no visible design changes from V8d
+# ============================================================
+
+def _install_v8e_client_bridge():
+    """Browser-side bridge for V8d date links and touch date inputs.
+
+    The visible Weekly Dashboard HTML stays exactly as V8d. Clicking a date
+    is intercepted in the browser and forwarded to a hidden Streamlit button,
+    so the dialog opens without query-string navigation to Beranda.
+
+    Date inputs remain visually native Streamlit controls. On touch devices,
+    the text field is made read-only/inputmode=none so the calendar can be
+    used without summoning the on-screen keyboard.
+    """
+    components.html(
+        r"""
+        <script>
+        (() => {
+          const parentWin = window.parent;
+          const doc = parentWin.document;
+
+          if (!parentWin.__ARAYA_V8E_BRIDGE__) {
+            parentWin.__ARAYA_V8E_BRIDGE__ = true;
+
+            const findDetailButton = (isoDate) => {
+              const target = "__ARAYA_DETAIL__" + isoDate;
+              const buttons = Array.from(doc.querySelectorAll("button"));
+              return buttons.find((b) => (b.textContent || "").trim() === target) || null;
+            };
+
+            doc.addEventListener("click", (event) => {
+              const link = event.target.closest && event.target.closest("a.date-detail-link");
+              if (!link) return;
+
+              let isoDate = "";
+              try {
+                const u = new URL(link.getAttribute("href"), parentWin.location.href);
+                isoDate = u.searchParams.get("detail_date") || "";
+              } catch (_) {}
+
+              if (!isoDate) return;
+
+              const btn = findDetailButton(isoDate);
+              if (!btn) return;  // native V8d link remains as fallback
+
+              event.preventDefault();
+              event.stopPropagation();
+              btn.click();
+            }, true);
+
+            const patchDateInputs = () => {
+              doc.querySelectorAll('[data-testid="stDateInput"] input').forEach((input) => {
+                input.setAttribute("inputmode", "none");
+                input.setAttribute("autocomplete", "off");
+                input.readOnly = true;
+                input.style.cursor = "pointer";
+                input.style.caretColor = "transparent";
+              });
+            };
+
+            patchDateInputs();
+
+            const observer = new MutationObserver(() => {
+              patchDateInputs();
+            });
+
+            observer.observe(doc.documentElement, {
+              childList: true,
+              subtree: true
+            });
+          }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+        scrolling=False,
+    )
+
+
+_install_v8e_client_bridge()
+
+
+# Hidden V8e native click bridge. It must contribute zero pixels to layout.
 st.markdown(
     """
     <style>
-    .v8e-date-label {
-        font-size:.88rem;
-        font-weight:600;
-        margin:.15rem 0 .35rem;
-        color:var(--st-text-color, inherit);
-    }
-
-    /* Only the local weekly container loses Streamlit's default vertical gap. */
-    div[data-testid="stVerticalBlock"]:has(
-        > div[data-testid="stElementContainer"] .v8e-week-shell-marker
-    ) {
-        gap:0 !important;
-        row-gap:0 !important;
-        padding:0 !important;
-    }
-
-    .v8e-week-shell-marker {
+    [class*="st-key-v8e_detail_bridge_"] {
         display:none !important;
+        width:0 !important;
         height:0 !important;
+        min-height:0 !important;
         margin:0 !important;
         padding:0 !important;
-    }
-
-    /* Week title is the top of one connected schedule card. */
-    .week-title {
-        margin:.75rem 0 0 0 !important;
-        border-radius:8px 8px 0 0 !important;
-        border:1px solid #D0D5DD !important;
-        border-bottom:0 !important;
-        box-sizing:border-box !important;
-    }
-
-    /* Date row: no column gaps, no rounded individual buttons. */
-    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"]) {
-        gap:0 !important;
-        margin:0 !important;
-        padding:0 !important;
-    }
-
-    div[data-testid="stHorizontalBlock"]:has([class*="st-key-v8e_date_"])
-      > div[data-testid="stColumn"] {
-        padding:0 !important;
-        margin:0 !important;
-    }
-
-    .v8e-activity-head {
-        height:58px;
-        min-height:58px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        box-sizing:border-box;
-        margin:0 !important;
-        padding:.45rem .30rem;
-        font-size:.92rem;
-        font-weight:800;
-        color:#172B4D;
-        background:#F8FAFC;
-        border-top:1px solid #D0D5DD;
-        border-left:1px solid #EAECF0;
-        border-right:1px solid #EAECF0;
-        border-bottom:1px solid #D0D5DD;
-    }
-
-    [class*="st-key-v8e_date_"] {
-        margin:0 !important;
-        padding:0 !important;
-    }
-
-    [class*="st-key-v8e_date_"] button {
-        position:relative !important;
-        width:100% !important;
-        height:58px !important;
-        min-height:58px !important;
-        margin:0 !important;
-        padding:25px .30rem 5px !important;
-        border-radius:0 !important;
-        border:0 !important;
-        border-top:1px solid #D0D5DD !important;
-        border-right:1px solid #EAECF0 !important;
-        border-bottom:1px solid #D0D5DD !important;
-        background:#F8FAFC !important;
-        color:#101828 !important;
-        box-shadow:none !important;
-        cursor:pointer !important;
-    }
-
-    [class*="st-key-v8e_date_"] button:hover {
-        background:#EEF4FF !important;
-    }
-
-    [class*="st-key-v8e_date_"] button p {
-        margin:0 !important;
-        padding:0 !important;
-        font-size:1rem !important;
-        line-height:1 !important;
-        font-weight:800 !important;
-        color:#101828 !important;
-        -webkit-text-fill-color:#101828 !important;
-        text-align:center !important;
-    }
-
-    /* Body starts immediately under the native date row. */
-    .v8e-schedule-body {
-        margin:0 !important;
-        border-top:0 !important;
-        border-radius:0 0 8px 8px !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(.v8e-schedule-body) {
-        margin:0 !important;
-        padding:0 !important;
+        overflow:hidden !important;
     }
     </style>
     """,
@@ -1991,128 +1973,79 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
 
     if week_no is None:
         week_no = 1
+    st.markdown(
+        f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
+        f'{end_date.strftime("%d %b %Y")}</div>',
+        unsafe_allow_html=True,
+    )
 
-    # Per-date CSS: small day-of-week label is rendered with ::before while
-    # the native button text remains the larger date. This preserves the
-    # original two-line visual without HTML links or overlay hacks.
-    date_css=[]
+    grid = []
+    # Header row
+    grid.append('<div class="schedule-head activity-head">ACTIVITY</div>')
     for d in days:
-        key=f"v8e_date_{week_no}_{d.isoformat()}"
-        dow=fmt_day(d).upper()
-        date_css.append(
-            f"""
-            [class*="st-key-{key}"] button::before {{
-                content:"{dow}";
-                display:block;
-                position:absolute;
-                top:10px;
-                left:0;
-                right:0;
-                font-size:.72rem;
-                line-height:1;
-                font-weight:700;
-                color:#667085;
-                text-align:center;
-                text-transform:uppercase;
-            }}
-            """
-        )
-        is_non_working,_=holiday_info(d)
-        if is_non_working:
-            date_css.append(
-                f"""
-                [class*="st-key-{key}"] button {{
-                    background:#ECFDF3 !important;
-                    border-color:#ABEFC6 !important;
-                    color:#067647 !important;
-                }}
-                [class*="st-key-{key}"] button::before,
-                [class*="st-key-{key}"] button p {{
-                    color:#067647 !important;
-                    -webkit-text-fill-color:#067647 !important;
-                    font-weight:800 !important;
-                }}
-                [class*="st-key-{key}"] button:hover {{
-                    background:#D1FADF !important;
-                }}
-                """
-            )
-
-    with st.container():
-        st.markdown(
-            f'<div class="v8e-week-shell-marker"></div>'
-            f'<style>{"".join(date_css)}</style>'
-            f'<div class="week-title">WEEK {week_no} • {start_date.strftime("%d %b")} – '
-            f'{end_date.strftime("%d %b %Y")}</div>',
-            unsafe_allow_html=True,
+        is_non_working, holiday_label = holiday_info(d)
+        holiday_class = " non-working-day" if is_non_working else ""
+        title = holiday_label if holiday_label else d.strftime("%d %b %Y")
+        grid.append(
+            f'<div class="schedule-head{holiday_class}">'
+            f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" target="_self" '
+            f'title="Open all activities • {html.escape(title)}">'
+            f'<div class="dow">{fmt_day(d)}</div>'
+            f'<div class="day">{d.strftime("%d %b")}</div>'
+            f'</a></div>'
         )
 
-        # Visible native Streamlit date row. No query-string navigation and
-        # no invisible overlay: this is both the design and click target.
-        header_cols=st.columns([0.8]+[1]*len(days),gap=None)
-        with header_cols[0]:
-            st.markdown(
-                '<div class="v8e-activity-head">ACTIVITY</div>',
-                unsafe_allow_html=True,
-            )
+    lane_specs = [
+        ("WORK", "work", "▣"),
+        ("MEETING", "meeting", "●"),
+        ("OTHER", "other", "•••"),
+    ]
+    lane_specs = [x for x in lane_specs if x[1] in visible_activities]
 
-        clicked_date=None
-        for idx,d in enumerate(days):
-            with header_cols[idx+1]:
-                if st.button(
-                    d.strftime("%d %b"),
-                    key=f"v8e_date_{week_no}_{d.isoformat()}",
-                    use_container_width=True,
-                ):
-                    clicked_date=d
-
-        if clicked_date is not None:
-            show_date_detail(
-                clicked_date,work,meetings,others,visible_activities
-            )
-
-        grid=[]
-        lane_specs=[
-            ("WORK","work","▣"),
-            ("MEETING","meeting","●"),
-            ("OTHER","other","•••"),
-        ]
-        lane_specs=[x for x in lane_specs if x[1] in visible_activities]
-
-        for lane_name,lane_type,lane_icon in lane_specs:
-            grid.append(
-                f'<div class="lane-label {lane_type}-lane">'
-                f'<span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
-            )
-
-            for d in days:
-                if lane_type=="work":
-                    rows=[]
-                    for (gd,pid),items in work_groups.items():
-                        if gd==d:
-                            rows.extend(items)
-                    content=render_work_cell(rows)
-                    css_class="cell work-cell"
-                elif lane_type=="meeting":
-                    rows=[]
-                    for (gd,pid),items in meeting_groups.items():
-                        if gd==d:
-                            rows.extend(items)
-                    content=render_meeting_cell(rows)
-                    css_class="cell meeting-cell"
-                else:
-                    content=render_other_cell(other_groups.get(d,[]))
-                    css_class="cell other-cell"
-
-                grid.append(f'<div class="{css_class}">{content}</div>')
-
-        st.markdown(
-            f'<div class="schedule-grid v8e-schedule-body" '
-            f'style="grid-template-columns:minmax(105px,.8fr) '
-            f'repeat({len(days)},minmax(135px,1fr));">'
-            + ''.join(grid) + '</div>',
-            unsafe_allow_html=True,
+    for lane_name, lane_type, lane_icon in lane_specs:
+        grid.append(
+            f'<div class="lane-label {lane_type}-lane"><span class="lane-icon">{lane_icon}</span>{lane_name}</div>'
         )
+
+        for d in days:
+            if lane_type == "work":
+                rows = []
+                for (gd, pid), items in work_groups.items():
+                    if gd == d:
+                        rows.extend(items)
+                content = render_work_cell(rows)
+                css_class = "cell work-cell"
+            elif lane_type == "meeting":
+                rows = []
+                for (gd, pid), items in meeting_groups.items():
+                    if gd == d:
+                        rows.extend(items)
+                content = render_meeting_cell(rows)
+                css_class = "cell meeting-cell"
+            else:
+                content = render_other_cell(other_groups.get(d, []))
+                css_class = "cell other-cell"
+
+            grid.append(f'<div class="{css_class}">{content}</div>')
+
+    st.markdown(
+        f'<div class="schedule-grid" style="grid-template-columns: minmax(105px, .8fr) repeat({len(days)}, minmax(135px, 1fr));">' + ''.join(grid) + '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Hidden native click targets for V8e.
+    # They are display:none, so the V8d visual layout is completely unchanged.
+    with st.container(
+        key=f"v8e_detail_bridge_{week_no}_{start_date.strftime('%Y%m%d')}"
+    ):
+        for detail_day in days:
+            if st.button(
+                f"__ARAYA_DETAIL__{detail_day.isoformat()}",
+                key=f"v8e_detail_{week_no}_{detail_day.isoformat()}",
+            ):
+                show_date_detail(
+                    detail_day, work, meetings, others, visible_activities
+                )
 
 
 
@@ -2634,9 +2567,37 @@ def weekly_dashboard():
         st.session_state["dash_week"]="All"
         st.session_state["dash_calendar_initialized"]=True
 
-    # Date detail is opened by native Streamlit date buttons in render_week().
-    # This preserves the active Weekly Dashboard session instead of navigating
-    # the browser through a raw query-string link.
+    # Date-detail overlay.
+    #
+    # The dashboard calendar itself is rendered as HTML, so clicking a date
+    # changes the URL query string. Treat that query string only as a one-time
+    # trigger: copy the clicked date into Session State, restore the dashboard
+    # month/year from that date, clear the URL, then rerun once. On the next
+    # run the dialog opens from Session State without resetting to today's
+    # month and it will not reopen after the user closes it.
+    detail_date_value = st.query_params.get("detail_date")
+    if detail_date_value:
+        try:
+            clicked_date = parse_date(detail_date_value)
+            st.session_state["dash_month"] = clicked_date.month
+            st.session_state["dash_year"] = clicked_date.year
+            st.session_state["dash_detail_pending"] = clicked_date.isoformat()
+        except Exception:
+            st.session_state.pop("dash_detail_pending", None)
+
+        # Do not use pop() here. Query-param mutation can itself trigger a
+        # rerun; clearing after state has been captured makes the transition
+        # deterministic.
+        st.query_params.clear()
+        st.rerun()
+
+    detail_date = None
+    pending_detail = st.session_state.pop("dash_detail_pending", None)
+    if pending_detail:
+        try:
+            detail_date = parse_date(pending_detail)
+        except Exception:
+            detail_date = None
 
     # Calendar range is derived from data + current year; no Setup entry needed.
     conn = get_conn()
@@ -2794,6 +2755,15 @@ def weekly_dashboard():
             )
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
+
+        if detail_date is not None:
+            show_date_detail(
+                detail_date,
+                work,
+                meetings,
+                others,
+                visible_activities,
+            )
 
     selected_weeks = list(enumerate(weeks, start=1))
     if selected_week != "All":
@@ -3140,88 +3110,6 @@ def ensure_v4_input_schema():
     conn.close()
 
 
-
-_DATE_MONTH_LABELS={
-    1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
-    7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",
-}
-
-
-def _tap_date_selector(
-    label,
-    value=None,
-    *,
-    key,
-    allow_blank=False,
-    disabled=False,
-    default_today=False,
-):
-    """Tap-only Day / Month / Year selector for touch devices.
-
-    It intentionally avoids Streamlit's editable date text field, so tapping
-    the control on iPad/iPhone does not bring up the on-screen keyboard.
-    """
-    if isinstance(value,pd.Timestamp):
-        value=value.date()
-    elif isinstance(value,datetime):
-        value=value.date()
-
-    if value is None and default_today and not allow_blank:
-        value=date.today()
-
-    today=date.today()
-    base=value if isinstance(value,date) else None
-
-    year_min=min(today.year-15,base.year if base else today.year)
-    year_max=max(today.year+15,base.year if base else today.year)
-    years=list(range(year_min,year_max+1))
-    blank="—"
-
-    day_options=([blank] if allow_blank else [])+list(range(1,32))
-    month_options=([blank] if allow_blank else [])+list(range(1,13))
-    year_options=([blank] if allow_blank else [])+years
-
-    default_day=base.day if base else (blank if allow_blank else today.day)
-    default_month=base.month if base else (blank if allow_blank else today.month)
-    default_year=base.year if base else (blank if allow_blank else today.year)
-
-    st.markdown(
-        f'<div class="v8e-date-label">{html.escape(label)}</div>',
-        unsafe_allow_html=True,
-    )
-    c1,c2,c3=st.columns([0.72,1.02,1.02],gap="small")
-    with c1:
-        selected_day=st.selectbox(
-            "Day",day_options,index=day_options.index(default_day),
-            key=f"{key}_day",disabled=disabled,label_visibility="collapsed",
-        )
-    with c2:
-        selected_month=st.selectbox(
-            "Month",month_options,index=month_options.index(default_month),
-            format_func=lambda x: blank if x==blank else _DATE_MONTH_LABELS[int(x)],
-            key=f"{key}_month",disabled=disabled,label_visibility="collapsed",
-        )
-    with c3:
-        selected_year=st.selectbox(
-            "Year",year_options,index=year_options.index(default_year),
-            key=f"{key}_year",disabled=disabled,label_visibility="collapsed",
-        )
-
-    if disabled and base is None:
-        return None
-    if allow_blank and (
-        selected_day==blank or selected_month==blank or selected_year==blank
-    ):
-        return None
-
-    try:
-        y=int(selected_year); m=int(selected_month); d=int(selected_day)
-        d=min(d,calendar.monthrange(y,m)[1])
-        return date(y,m,d)
-    except Exception:
-        return None
-
-
 def _select_or_empty(label, options, key=None, index=0, help=None):
     opts=list(options)
     if not opts:
@@ -3308,14 +3196,18 @@ def _add_team():
         st.markdown("#### Intern Period")
         d1,d2=st.columns(2)
         with d1:
-            intern_start=_tap_date_selector(
-                "Intern Start *",value=None,key="v8e_add_intern_start",
-                allow_blank=True,disabled=(category!="Intern"),
+            intern_start=st.date_input(
+                "Intern Start *",
+                value=None,
+                disabled=(category!="Intern"),
+                key="v4_add_intern_start",
             )
         with d2:
-            intern_end=_tap_date_selector(
-                "Intern End *",value=None,key="v8e_add_intern_end",
-                allow_blank=True,disabled=(category!="Intern"),
+            intern_end=st.date_input(
+                "Intern End *",
+                value=None,
+                disabled=(category!="Intern"),
+                key="v4_add_intern_end",
             )
 
         if category!="Intern":
@@ -3409,15 +3301,19 @@ def _edit_team(df):
         d1,d2=st.columns(2)
         with d1:
             sd=safe_date(row["intern_start"])
-            intern_start=_tap_date_selector(
-                "Intern Start *",value=sd,key=f"v8e_edit_intern_start_{rid}",
-                allow_blank=True,disabled=(category!="Intern"),
+            intern_start=st.date_input(
+                "Intern Start *",
+                value=sd,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_start_{rid}",
             )
         with d2:
             ed=safe_date(row["intern_end"])
-            intern_end=_tap_date_selector(
-                "Intern End *",value=ed,key=f"v8e_edit_intern_end_{rid}",
-                allow_blank=True,disabled=(category!="Intern"),
+            intern_end=st.date_input(
+                "Intern End *",
+                value=ed,
+                disabled=(category!="Intern"),
+                key=f"v4_edit_intern_end_{rid}",
             )
 
         if category!="Intern":
@@ -3822,12 +3718,8 @@ def _add_project():
             ptypes=master_values("project_type","project_type")
             ptype=_select_or_empty("Project Type",ptypes)
         with c2:
-            start=_tap_date_selector(
-                "Start Date",value=None,key="v8e_project_add_start",allow_blank=True
-            )
-            finish=_tap_date_selector(
-                "Target Finish",value=None,key="v8e_project_add_finish",allow_blank=True
-            )
+            start=st.date_input("Start Date",value=None)
+            finish=st.date_input("Target Finish",value=None)
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes)
         with c3:
@@ -3886,12 +3778,8 @@ def _edit_project(df):
         with c2:
             start=safe_date(row["start_date"], None)
             finish=safe_date(row["target_finish"], None)
-            start=_tap_date_selector(
-                "Start Date",value=start,key=f"v8e_project_edit_start_{pid}",allow_blank=True
-            )
-            finish=_tap_date_selector(
-                "Target Finish",value=finish,key=f"v8e_project_edit_finish_{pid}",allow_blank=True
-            )
+            start=st.date_input("Start Date",value=start)
+            finish=st.date_input("Target Finish",value=finish)
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes,index=sizes.index(row["project_size"]) if row["project_size"] in sizes else 0)
         with c3:
@@ -4587,12 +4475,8 @@ def _add_work():
         c1,c2=st.columns(2)
         with c1:
             pid=st.selectbox("Project ID",pids)
-            start=_tap_date_selector(
-                "Start Date",key="v8e_work_add_start",default_today=True
-            )
-            end=_tap_date_selector(
-                "End Date",key="v8e_work_add_end",default_today=True
-            )
+            start=st.date_input("Start Date")
+            end=st.date_input("End Date")
             at=_select_or_empty("Activity Type",ats)
         with c2:
             task=st.text_input("Deliverable / Task *")
@@ -4623,12 +4507,7 @@ def _edit_work(df):
         pid=st.selectbox("Project ID",projects["id"].tolist(),index=projects["id"].tolist().index(row["project_id"]))
         sd=safe_date(row["start_date"], date.today())
         ed=safe_date(row["end_date"], sd)
-        start=_tap_date_selector(
-            "Start Date",value=sd,key=f"v8e_work_edit_start_{rid}"
-        )
-        end=_tap_date_selector(
-            "End Date",value=ed,key=f"v8e_work_edit_end_{rid}"
-        )
+        start=st.date_input("Start Date",value=sd); end=st.date_input("End Date",value=ed)
         task=st.text_input("Deliverable / Task *",value=clean(row["task"]))
         at=_select_or_empty("Activity Type",ats,index=ats.index(row["activity_type"]) if row["activity_type"] in ats else 0)
         priority=_select_or_empty("Priority",pris,index=pris.index(row["priority"]) if row["priority"] in pris else 0)
@@ -4669,9 +4548,7 @@ def _add_meeting():
     with st.form("v4_add_meeting",clear_on_submit=True):
         c1,c2=st.columns(2)
         with c1:
-            d=_tap_date_selector(
-                "Date",key="v8e_meeting_add_date",default_today=True
-            )
+            d=st.date_input("Date")
             c3,c4=st.columns(2)
             with c3: start=st.time_input("Start")
             with c4: end=st.time_input("End")
@@ -4705,9 +4582,7 @@ def _edit_meeting(df):
     types=master_values("meeting_type","meeting_type");locs=master_values("meeting_location","location")
     with st.form("v4_edit_meeting"):
         d=safe_date(row["activity_date"], date.today())
-        d=_tap_date_selector(
-            "Date",value=d,key=f"v8e_meeting_edit_date_{rid}"
-        )
+        d=st.date_input("Date",value=d)
         def parse_t(v,default):
             try:return datetime.strptime(str(v),"%H:%M").time()
             except:return default
@@ -4748,9 +4623,7 @@ def _other_df():
 def _add_other():
     sdf=_staff_options(); people=["No Specific Staff"]+(sdf["name"].tolist() if not sdf.empty else [])
     with st.form("v4_add_other",clear_on_submit=True):
-        d=_tap_date_selector(
-            "Date",key="v8e_other_add_date",default_today=True
-        )
+        d=st.date_input("Date")
         activity=st.text_input("Other Activity *")
         person=st.selectbox("Related Staff",people)
         notes=st.text_area("Notes")
@@ -4772,9 +4645,7 @@ def _edit_other(df):
     p0=row["related_staff"] or "No Specific Staff"
     with st.form("v4_edit_other"):
         d=safe_date(row["activity_date"], date.today())
-        d=_tap_date_selector(
-            "Date",value=d,key=f"v8e_other_edit_date_{rid}"
-        )
+        d=st.date_input("Date",value=d)
         activity=st.text_input("Other Activity *",value=clean(row["activity"]))
         person=st.selectbox("Related Staff",people,index=people.index(p0) if p0 in people else 0)
         notes=st.text_area("Notes",value=clean(row["notes"]))
@@ -5092,6 +4963,14 @@ def input_data_page(submodule):
 # ------------------------------------------------------------
 # V3a uses a clean static hierarchy:
 # Module names are section headers; only submodules are clickable.
+
+# V8e fallback for the original V8d date link.
+# Normally the client bridge prevents navigation entirely. If the browser
+# blocks that bridge, detail_date still returns to Weekly Dashboard instead
+# of Beranda.
+if st.query_params.get("detail_date"):
+    st.session_state.v3a_module = "Dashboard"
+    st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
 
 if "v3a_module" not in st.session_state:
     st.session_state.v3a_module = "Dashboard"
