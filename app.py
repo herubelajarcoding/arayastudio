@@ -1292,6 +1292,303 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# ============================================================
+# V9 TEAM DASHBOARD
+# ============================================================
+st.markdown(
+    """
+    <style>
+    .team-kpi-grid {
+        display:grid;
+        grid-template-columns:repeat(5,minmax(0,1fr));
+        gap:14px;
+        margin:.55rem 0 .9rem;
+    }
+    .team-kpi {
+        position:relative;
+        min-height:108px;
+        padding:16px 17px;
+        border-radius:14px;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 12%, transparent);
+        background:color-mix(in srgb, var(--st-secondary-background-color, #F8FAFC) 92%, transparent);
+        overflow:hidden;
+    }
+    .team-kpi::after {
+        content:"";
+        position:absolute;
+        width:90px;height:90px;border-radius:50%;
+        right:-28px;top:-34px;
+        background:color-mix(in srgb, var(--st-text-color, #172B4D) 5%, transparent);
+    }
+    .team-kpi-label {
+        font-size:.70rem;
+        font-weight:800;
+        letter-spacing:.045em;
+        color:var(--st-text-color, #475467);
+        opacity:.68;
+        text-transform:uppercase;
+        position:relative;z-index:1;
+    }
+    .team-kpi-value {
+        margin-top:.25rem;
+        font-size:1.72rem;
+        line-height:1.05;
+        font-weight:850;
+        color:var(--st-text-color, #172B4D);
+        position:relative;z-index:1;
+    }
+    .team-kpi-sub {
+        margin-top:.30rem;
+        font-size:.70rem;
+        color:var(--st-text-color, #667085);
+        opacity:.62;
+        position:relative;z-index:1;
+    }
+
+    .team-section-head {
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:1rem;
+        margin:1.05rem 0 .55rem;
+    }
+    .team-section-title {
+        font-size:1.08rem;
+        font-weight:800;
+        color:var(--st-text-color, #172B4D);
+    }
+    .team-section-note {
+        font-size:.72rem;
+        color:var(--st-text-color, #667085);
+        opacity:.62;
+    }
+
+    .team-status-strip {
+        display:flex;
+        flex-wrap:wrap;
+        gap:.45rem;
+        margin:.15rem 0 .85rem;
+    }
+    .team-status-chip {
+        display:inline-flex;
+        align-items:center;
+        gap:.42rem;
+        padding:.36rem .58rem;
+        border-radius:999px;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 12%, transparent);
+        background:var(--st-secondary-background-color, #F8FAFC);
+        color:var(--st-text-color, #344054);
+        font-size:.72rem;
+        font-weight:700;
+    }
+    .team-status-dot {
+        width:8px;height:8px;border-radius:50%;
+        background:#98A2B3;
+    }
+    .team-status-chip.available .team-status-dot {background:#12B76A;}
+    .team-status-chip.normal .team-status-dot {background:#2E90FA;}
+    .team-status-chip.full .team-status-dot {background:#F79009;}
+    .team-status-chip.overload .team-status-dot {background:#F04438;}
+
+    .team-roster {
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:13px;
+        margin-bottom:.9rem;
+    }
+    .team-person-card {
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 12%, transparent);
+        border-radius:15px;
+        background:color-mix(in srgb, var(--st-secondary-background-color, #FFFFFF) 94%, transparent);
+        padding:15px 16px 14px;
+        box-shadow:0 2px 8px rgba(16,24,40,.035);
+    }
+    .team-person-top {
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:1rem;
+    }
+    .team-person-name {
+        font-size:.96rem;
+        font-weight:850;
+        line-height:1.25;
+        color:var(--st-text-color, #172B4D);
+    }
+    .team-person-meta {
+        margin-top:.18rem;
+        font-size:.70rem;
+        color:var(--st-text-color, #667085);
+        opacity:.66;
+    }
+    .team-load-number {
+        font-size:1.30rem;
+        line-height:1;
+        font-weight:900;
+        color:var(--st-text-color, #172B4D);
+        white-space:nowrap;
+    }
+    .team-load-caption {
+        margin-top:.18rem;
+        text-align:right;
+        font-size:.64rem;
+        color:var(--st-text-color, #667085);
+        opacity:.60;
+    }
+
+    .team-bar {
+        position:relative;
+        height:9px;
+        border-radius:999px;
+        margin:.80rem 0 .65rem;
+        overflow:hidden;
+        background:color-mix(in srgb, var(--st-text-color, #98A2B3) 10%, transparent);
+    }
+    .team-bar-fill {
+        height:100%;
+        border-radius:999px;
+        background:#2E90FA;
+    }
+    .team-person-card.available .team-bar-fill {background:#12B76A;}
+    .team-person-card.normal .team-bar-fill {background:#2E90FA;}
+    .team-person-card.full .team-bar-fill {background:#F79009;}
+    .team-person-card.overload .team-bar-fill {background:#F04438;}
+
+    .team-person-foot {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:.6rem;
+        align-items:end;
+    }
+    .team-stat-label {
+        font-size:.62rem;
+        font-weight:750;
+        letter-spacing:.035em;
+        text-transform:uppercase;
+        color:var(--st-text-color, #667085);
+        opacity:.58;
+    }
+    .team-stat-value {
+        margin-top:.08rem;
+        font-size:.78rem;
+        font-weight:750;
+        color:var(--st-text-color, #344054);
+    }
+    .team-stat-right {text-align:right;}
+
+    .team-badge {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:.20rem .48rem;
+        border-radius:999px;
+        font-size:.62rem;
+        font-weight:850;
+        letter-spacing:.03em;
+        border:1px solid transparent;
+    }
+    .team-badge.available {color:#027A48;background:#ECFDF3;border-color:#ABEFC6;}
+    .team-badge.normal {color:#175CD3;background:#EFF8FF;border-color:#B2DDFF;}
+    .team-badge.full {color:#B54708;background:#FFFAEB;border-color:#FEDF89;}
+    .team-badge.overload {color:#B42318;background:#FEF3F2;border-color:#FECDCA;}
+
+    .team-detail-shell {
+        margin-top:.35rem;
+        padding:16px 17px;
+        border-radius:15px;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 12%, transparent);
+        background:color-mix(in srgb, var(--st-secondary-background-color, #F8FAFC) 94%, transparent);
+    }
+    .team-detail-name {
+        font-size:1.04rem;
+        font-weight:850;
+        color:var(--st-text-color, #172B4D);
+    }
+    .team-detail-meta {
+        font-size:.72rem;
+        color:var(--st-text-color, #667085);
+        opacity:.65;
+        margin:.12rem 0 .75rem;
+    }
+    .team-detail-kpis {
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:10px;
+        margin-bottom:.85rem;
+    }
+    .team-detail-kpi {
+        padding:.65rem .75rem;
+        border-radius:10px;
+        background:color-mix(in srgb, var(--st-background-color, #FFFFFF) 92%, transparent);
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 10%, transparent);
+    }
+    .team-detail-kpi b {
+        display:block;
+        font-size:1.05rem;
+        color:var(--st-text-color, #172B4D);
+    }
+    .team-detail-kpi span {
+        display:block;
+        margin-top:.1rem;
+        font-size:.64rem;
+        color:var(--st-text-color, #667085);
+        opacity:.62;
+    }
+
+    .team-detail-table {
+        width:100%;
+        border-collapse:separate;
+        border-spacing:0;
+        overflow:hidden;
+        border-radius:10px;
+        border:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 10%, transparent);
+        font-size:.72rem;
+    }
+    .team-detail-table th {
+        text-align:left;
+        font-size:.62rem;
+        letter-spacing:.035em;
+        text-transform:uppercase;
+        color:var(--st-text-color, #667085);
+        opacity:.70;
+        padding:.62rem .60rem;
+        background:color-mix(in srgb, var(--st-text-color, #172B4D) 4%, transparent);
+        border-bottom:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 10%, transparent);
+    }
+    .team-detail-table td {
+        padding:.64rem .60rem;
+        color:var(--st-text-color, #344054);
+        border-bottom:1px solid color-mix(in srgb, var(--st-text-color, #172B4D) 8%, transparent);
+        vertical-align:top;
+    }
+    .team-detail-table tr:last-child td {border-bottom:0;}
+    .team-detail-load {
+        font-weight:850;
+        white-space:nowrap;
+    }
+
+    .team-formula-note {
+        font-size:.70rem;
+        color:var(--st-text-color, #667085);
+        opacity:.66;
+        margin:.3rem 0 0;
+    }
+
+    @media (max-width: 1100px) {
+        .team-kpi-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
+        .team-roster {grid-template-columns:1fr;}
+    }
+    @media (max-width: 700px) {
+        .team-kpi-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+        .team-detail-kpis {grid-template-columns:1fr;}
+        .team-detail-table {font-size:.68rem;}
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ============================================================
 # DATABASE
 # ============================================================
@@ -1507,6 +1804,7 @@ def _clear_read_caches():
         "get_staff",
         "get_refs",
         "load_activities",
+        "_team_workload_data",
         "master_values",
         "get_master_table",
     ):
@@ -3689,6 +3987,510 @@ def weekly_dashboard():
             o = o.iloc[0:0]
 
         render_week(week_start, week_end, w, m, o, visible_activities, week_no=_)
+
+
+
+# ============================================================
+# V9 TEAM DASHBOARD LOGIC
+# ============================================================
+
+def _as_percent(value):
+    """Accept setup loads as either decimals (0.35) or percentages (35)."""
+    try:
+        v=float(value)
+    except Exception:
+        return 0.0
+    if abs(v) <= 1.5:
+        return v*100.0
+    return v
+
+
+def _team_status_class(label, load_pct):
+    s=clean(label).lower()
+    if "over" in s:
+        return "overload"
+    if "full" in s:
+        return "full"
+    if "normal" in s:
+        return "normal"
+    if "avail" in s or "ready" in s:
+        return "available"
+
+    if load_pct > 100:
+        return "overload"
+    if load_pct > 85:
+        return "full"
+    if load_pct > 60:
+        return "normal"
+    return "available"
+
+
+def _workload_thresholds():
+    try:
+        df=get_master_table("workload_status").copy()
+    except Exception:
+        df=pd.DataFrame()
+
+    rows=[]
+    if not df.empty and "status" in df.columns and "max_load" in df.columns:
+        for _,r in df.iterrows():
+            label=clean(r.get("status"))
+            if not label:
+                continue
+            try:
+                mx=_as_percent(r.get("max_load"))
+            except Exception:
+                continue
+            rows.append((label,mx))
+
+    rows=sorted(rows,key=lambda x:x[1])
+    if not rows:
+        rows=[
+            ("Available",60.0),
+            ("Normal",85.0),
+            ("Full",100.0),
+            ("Overload",9999.0),
+        ]
+    return rows
+
+
+def _classify_workload(load_pct, thresholds=None):
+    thresholds=thresholds or _workload_thresholds()
+    for label,max_load in thresholds:
+        if load_pct <= max_load + 1e-9:
+            return label
+    return "Overload"
+
+
+@st.cache_data(ttl=30,show_spinner=False)
+def _team_workload_data():
+    """Return active team summary + detailed active-project allocations."""
+    staff=db_df("""
+        SELECT id,name,category,primary_role,active
+        FROM staff
+        WHERE active=1
+        ORDER BY name
+    """)
+
+    allocations=db_df("""
+        SELECT
+            a.id,
+            a.project_id,
+            COALESCE(p.name,'') AS project_name,
+            a.phase,
+            a.staff,
+            COALESCE(a.role_on_project,'') AS role_on_project,
+            COALESCE(p.project_size,'') AS project_size,
+            COALESCE(p.status,'') AS project_status,
+            COALESCE(mp.multiplier,1.0) AS size_multiplier,
+            COALESCE(ph.base_load,0.0) AS phase_base_load
+        FROM staff_allocation a
+        LEFT JOIN projects p ON p.id=a.project_id
+        LEFT JOIN master_project_size mp ON mp.project_size=p.project_size
+        LEFT JOIN master_phase ph ON ph.phase=a.phase
+        ORDER BY a.staff,a.project_id,a.phase
+    """)
+
+    if allocations.empty:
+        allocations=pd.DataFrame(columns=[
+            "id","project_id","project_name","phase","staff","role_on_project",
+            "project_size","project_status","size_multiplier","phase_base_load",
+            "phase_load_pct","assigned_staff","individual_load_pct"
+        ])
+    else:
+        allocations["phase_load_pct"]=allocations.apply(
+            lambda r:(
+                _as_percent(r.get("phase_base_load"))
+                * float(r.get("size_multiplier") or 1.0)
+                if clean(r.get("project_status")).lower()=="active"
+                else 0.0
+            ),
+            axis=1,
+        )
+
+        team_counts=(
+            allocations.groupby(["project_id","phase"])["staff"]
+            .nunique()
+            .rename("assigned_staff")
+            .reset_index()
+        )
+        allocations=allocations.merge(
+            team_counts,on=["project_id","phase"],how="left"
+        )
+        allocations["assigned_staff"]=(
+            pd.to_numeric(allocations["assigned_staff"],errors="coerce")
+            .fillna(1).clip(lower=1)
+        )
+        allocations["individual_load_pct"]=(
+            allocations["phase_load_pct"]/allocations["assigned_staff"]
+        )
+
+    thresholds=_workload_thresholds()
+
+    summary_rows=[]
+    for _,person in staff.iterrows():
+        name=clean(person.get("name"))
+        mine=allocations[
+            allocations["staff"].astype(str).str.casefold()==name.casefold()
+        ].copy() if not allocations.empty else allocations.copy()
+
+        active_mine=mine[
+            mine["project_status"].astype(str).str.lower()=="active"
+        ].copy() if not mine.empty else mine.copy()
+
+        total_load=float(active_mine["individual_load_pct"].sum()) if not active_mine.empty else 0.0
+        active_projects=(
+            active_mine[["project_id","project_name","project_size"]]
+            .drop_duplicates(subset=["project_id"])
+            if not active_mine.empty
+            else pd.DataFrame(columns=["project_id","project_name","project_size"])
+        )
+
+        size_counts={}
+        for size,count in active_projects["project_size"].fillna("").replace("","Unspecified").value_counts().items():
+            size_counts[clean(size) or "Unspecified"]=int(count)
+
+        preferred=["Big","Medium","Small"]
+        ordered=[]
+        for size in preferred:
+            if size in size_counts:
+                ordered.append(f"{size_counts.pop(size)} {size}")
+        for size in sorted(size_counts):
+            ordered.append(f"{size_counts[size]} {size}")
+        mix=" · ".join(ordered) if ordered else "No active project"
+
+        status=_classify_workload(total_load,thresholds)
+
+        summary_rows.append({
+            "name":name,
+            "category":clean(person.get("category")),
+            "primary_role":clean(person.get("primary_role")),
+            "project_count":int(len(active_projects)),
+            "project_mix":mix,
+            "load_pct":total_load,
+            "remaining_pct":max(0.0,100.0-total_load),
+            "status":status,
+            "status_class":_team_status_class(status,total_load),
+            "on_hold_assignments":int(
+                (mine["project_status"].astype(str).str.lower()=="on hold").sum()
+            ) if not mine.empty else 0,
+        })
+
+    summary=pd.DataFrame(summary_rows)
+    if not summary.empty:
+        summary=summary.sort_values(
+            ["load_pct","project_count","name"],
+            ascending=[False,False,True],
+        ).reset_index(drop=True)
+
+    return summary,allocations
+
+
+def _render_team_status_strip(df):
+    if df.empty:
+        return
+    counts=(
+        df.groupby(["status","status_class"]).size()
+        .reset_index(name="count")
+        .sort_values(["count","status"],ascending=[False,True])
+    )
+    chips=[]
+    for _,r in counts.iterrows():
+        chips.append(
+            f'<span class="team-status-chip {html.escape(clean(r["status_class"]))}">'
+            f'<span class="team-status-dot"></span>'
+            f'{html.escape(clean(r["status"]))} <b>{int(r["count"])}</b>'
+            f'</span>'
+        )
+    st.markdown(
+        '<div class="team-status-strip">'+"".join(chips)+'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_team_cards(df):
+    if df.empty:
+        st.info("No active team member matches the selected filters.")
+        return
+
+    cards=[]
+    for _,r in df.iterrows():
+        load=float(r["load_pct"])
+        width=max(0.0,min(100.0,load))
+        status=clean(r["status"])
+        status_class=clean(r["status_class"])
+        meta=" • ".join(
+            x for x in [clean(r["category"]),clean(r["primary_role"])] if x
+        )
+        remaining=max(0.0,100.0-load)
+        overflow=max(0.0,load-100.0)
+
+        capacity_text=(
+            f"+{overflow:.0f}% over capacity"
+            if overflow>0
+            else f"{remaining:.0f}% remaining"
+        )
+
+        cards.append(
+            f'<div class="team-person-card {html.escape(status_class)}">'
+            f'<div class="team-person-top">'
+            f'<div>'
+            f'<div class="team-person-name">{html.escape(clean(r["name"]))}</div>'
+            f'<div class="team-person-meta">{html.escape(meta or "Team Member")}</div>'
+            f'</div>'
+            f'<div>'
+            f'<div class="team-load-number">{load:.0f}%</div>'
+            f'<div class="team-load-caption">{html.escape(capacity_text)}</div>'
+            f'</div>'
+            f'</div>'
+            f'<div class="team-bar"><div class="team-bar-fill" style="width:{width:.2f}%"></div></div>'
+            f'<div class="team-person-foot">'
+            f'<div>'
+            f'<div class="team-stat-label">Active Projects</div>'
+            f'<div class="team-stat-value">{int(r["project_count"])} • {html.escape(clean(r["project_mix"]))}</div>'
+            f'</div>'
+            f'<div class="team-stat-right">'
+            f'<div class="team-stat-label">Workload Status</div>'
+            f'<div class="team-stat-value"><span class="team-badge {html.escape(status_class)}">'
+            f'{html.escape(status)}</span></div>'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    st.markdown(
+        '<div class="team-roster">'+"".join(cards)+'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_staff_detail(person_row,allocations):
+    name=clean(person_row["name"])
+    mine=allocations[
+        (allocations["staff"].astype(str).str.casefold()==name.casefold())
+        & (allocations["project_status"].astype(str).str.lower()=="active")
+    ].copy() if not allocations.empty else allocations.copy()
+
+    meta=" • ".join(
+        x for x in [
+            clean(person_row.get("category")),
+            clean(person_row.get("primary_role")),
+        ] if x
+    )
+    load=float(person_row["load_pct"])
+    remaining=max(0.0,100.0-load)
+
+    st.markdown(
+        f'<div class="team-detail-shell">'
+        f'<div class="team-detail-name">{html.escape(name)}</div>'
+        f'<div class="team-detail-meta">{html.escape(meta or "Team Member")}</div>'
+        f'<div class="team-detail-kpis">'
+        f'<div class="team-detail-kpi"><b>{int(person_row["project_count"])}</b><span>Active Projects</span></div>'
+        f'<div class="team-detail-kpi"><b>{load:.1f}%</b><span>Total Workload</span></div>'
+        f'<div class="team-detail-kpi"><b>{remaining:.1f}%</b><span>Remaining Capacity</span></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    if mine.empty:
+        st.markdown(
+            '<div class="team-formula-note">No active project allocation for this staff member.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    rows=[]
+    mine=mine.sort_values(
+        ["individual_load_pct","project_id","phase"],
+        ascending=[False,True,True],
+    )
+    for _,r in mine.iterrows():
+        phase_base=_as_percent(r.get("phase_base_load"))
+        mult=float(r.get("size_multiplier") or 1.0)
+        rows.append(
+            '<tr>'
+            f'<td><b>{html.escape(clean(r.get("project_id")))}</b><br>'
+            f'<span style="opacity:.66">{html.escape(clean(r.get("project_name")))}</span></td>'
+            f'<td>{html.escape(clean(r.get("phase")))}</td>'
+            f'<td>{html.escape(clean(r.get("project_size")) or "—")}</td>'
+            f'<td>{html.escape(clean(r.get("role_on_project")) or "—")}</td>'
+            f'<td>{phase_base:.1f}% × {mult:g}</td>'
+            f'<td>{int(float(r.get("assigned_staff") or 1))}</td>'
+            f'<td class="team-detail-load">{float(r.get("individual_load_pct") or 0):.1f}%</td>'
+            '</tr>'
+        )
+
+    st.markdown(
+        '<table class="team-detail-table">'
+        '<thead><tr>'
+        '<th>Project</th><th>Phase</th><th>Size</th><th>Role</th>'
+        '<th>Phase Load</th><th>Team</th><th>Staff Load</th>'
+        '</tr></thead>'
+        '<tbody>'+"".join(rows)+'</tbody>'
+        '</table>'
+        '<div class="team-formula-note">'
+        'Staff Load = Phase Base Load × Project Size Multiplier ÷ staff assigned to the same project phase. '
+        'Only Active projects contribute to current workload; On Hold contributes 0%.'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def team_dashboard():
+    st.markdown(
+        '<div class="app-title">Team Dashboard</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="app-subtitle">'
+        'Capacity & workload view • 100% = nominal full capacity • Active projects only'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    summary,allocations=_team_workload_data()
+
+    if summary.empty:
+        st.info("No active team members found.")
+        return
+
+    # Filters
+    f1,f2,f3=st.columns([1,1.35,1],gap="small")
+    categories=["All Categories"]+sorted(
+        [x for x in summary["category"].dropna().unique().tolist() if clean(x)]
+    )
+    roles=["All Roles"]+sorted(
+        [x for x in summary["primary_role"].dropna().unique().tolist() if clean(x)]
+    )
+    statuses=["All Statuses"]+sorted(
+        [x for x in summary["status"].dropna().unique().tolist() if clean(x)]
+    )
+
+    with f1:
+        category_filter=st.selectbox(
+            "CATEGORY",categories,key="team_dash_category"
+        )
+    with f2:
+        role_filter=st.selectbox(
+            "PRIMARY ROLE",roles,key="team_dash_role"
+        )
+    with f3:
+        status_filter=st.selectbox(
+            "WORKLOAD STATUS",statuses,key="team_dash_status"
+        )
+
+    filtered=summary.copy()
+    if category_filter!="All Categories":
+        filtered=filtered[filtered["category"]==category_filter].copy()
+    if role_filter!="All Roles":
+        filtered=filtered[filtered["primary_role"]==role_filter].copy()
+    if status_filter!="All Statuses":
+        filtered=filtered[filtered["status"]==status_filter].copy()
+
+    # KPI values follow the dashboard filters.
+    active_team=len(filtered)
+    active_projects=0
+    if not filtered.empty and not allocations.empty:
+        names=set(filtered["name"].astype(str).str.casefold())
+        alloc_filtered=allocations[
+            allocations["staff"].astype(str).str.casefold().isin(names)
+            & (allocations["project_status"].astype(str).str.lower()=="active")
+        ].copy()
+        active_projects=int(alloc_filtered["project_id"].nunique())
+    avg_load=float(filtered["load_pct"].mean()) if not filtered.empty else 0.0
+    over_capacity=int((filtered["load_pct"]>100.0).sum()) if not filtered.empty else 0
+    free_capacity=float(
+        filtered["load_pct"].map(lambda x:max(0.0,100.0-float(x))).sum()
+    ) if not filtered.empty else 0.0
+
+    kpis=[
+        ("Active Team",f"{active_team}","Filtered active staff"),
+        ("Active Projects",f"{active_projects}","Projects represented"),
+        ("Average Load",f"{avg_load:.0f}%","Mean across filtered team"),
+        ("Over Capacity",f"{over_capacity}","Staff above 100%"),
+        ("Free Capacity",f"{free_capacity:.0f}%","Combined capacity to 100%"),
+    ]
+    kpi_html='<div class="team-kpi-grid">'
+    for label,value,sub in kpis:
+        kpi_html+=(
+            '<div class="team-kpi">'
+            f'<div class="team-kpi-label">{html.escape(label)}</div>'
+            f'<div class="team-kpi-value">{html.escape(value)}</div>'
+            f'<div class="team-kpi-sub">{html.escape(sub)}</div>'
+            '</div>'
+        )
+    kpi_html+='</div>'
+    st.markdown(kpi_html,unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="team-section-head">'
+        '<div><div class="team-section-title">Team Workload</div>'
+        '<div class="team-section-note">Sorted by current workload • Project count is context, load % is the primary capacity measure</div></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _render_team_status_strip(filtered)
+    _render_team_cards(filtered)
+
+    st.markdown(
+        '<div class="team-section-head">'
+        '<div><div class="team-section-title">Staff Workload Detail</div>'
+        '<div class="team-section-note">Full contribution by project phase</div></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if filtered.empty:
+        st.info("No staff detail available for the selected filters.")
+        return
+
+    detail_names=filtered["name"].tolist()
+    selected_name=st.selectbox(
+        "Inspect Staff",
+        detail_names,
+        key="team_dash_detail_staff",
+        format_func=lambda x:(
+            f"{x} • {float(filtered.loc[filtered['name'].eq(x),'load_pct'].iloc[0]):.0f}% load"
+        ),
+    )
+    person=filtered[filtered["name"]==selected_name].iloc[0]
+    _render_staff_detail(person,allocations)
+
+    with st.expander("How workload is calculated",expanded=False):
+        thresholds=_workload_thresholds()
+        phase_df=get_master_table("phase").drop(columns=["id"],errors="ignore")
+        size_df=get_master_table("project_size").drop(columns=["id"],errors="ignore")
+
+        st.markdown(
+            "**Formula:** Phase Base Load × Project Size Multiplier ÷ "
+            "staff assigned to the same Project + Phase."
+        )
+        st.caption(
+            "Only projects with status Active contribute to current load. "
+            "Project count is shown for context and does not directly determine workload."
+        )
+
+        c1,c2,c3=st.columns([1.2,1,1.1],gap="medium")
+        with c1:
+            st.markdown("**Phase Load**")
+            if not phase_df.empty:
+                phase_show=phase_df.copy()
+                if "base_load" in phase_show.columns:
+                    phase_show["base_load"]=phase_show["base_load"].map(
+                        lambda x:f"{_as_percent(x):.0f}%"
+                    )
+                st.dataframe(phase_show,use_container_width=True,hide_index=True)
+        with c2:
+            st.markdown("**Project Size**")
+            if not size_df.empty:
+                st.dataframe(size_df,use_container_width=True,hide_index=True)
+        with c3:
+            st.markdown("**Workload Status**")
+            status_show=pd.DataFrame(
+                [{"Status":s,"Max Load":f"{mx:.0f}%"} for s,mx in thresholds]
+            )
+            st.dataframe(status_show,use_container_width=True,hide_index=True)
 
 
 # ============================================================
@@ -5942,6 +6744,19 @@ if st.sidebar.button(
     st.session_state["dash_calendar_initialized"]=True
     st.rerun()
 
+_team_selected = (
+    st.session_state.v3a_module == "Dashboard"
+    and st.session_state.v3a_dashboard_submodule == "Team Dashboard"
+)
+if st.sidebar.button(
+    f"{'●' if _team_selected else '○'}  Team Dashboard",
+    key="v9_static_team_dashboard",
+    use_container_width=True,
+):
+    st.session_state.v3a_module = "Dashboard"
+    st.session_state.v3a_dashboard_submodule = "Team Dashboard"
+    st.rerun()
+
 # ------------------------------------------------------------
 # MODULE: INPUT DATA
 # ------------------------------------------------------------
@@ -5997,6 +6812,8 @@ module = st.session_state.v3a_module
 if module == "Dashboard":
     if st.session_state.v3a_dashboard_submodule == "Weekly Dashboard":
         weekly_dashboard()
+    elif st.session_state.v3a_dashboard_submodule == "Team Dashboard":
+        team_dashboard()
     else:
         beranda_page()
 elif module == "Input Data":
