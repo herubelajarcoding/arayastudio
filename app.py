@@ -873,6 +873,45 @@ st.markdown(
 )
 
 
+# V8e touch/date-header styling.
+st.markdown(
+    """
+    <style>
+    .v8e-date-label {
+        font-size:.88rem;
+        font-weight:600;
+        margin:.15rem 0 .35rem;
+        color:var(--st-text-color, inherit);
+    }
+    .v8e-activity-head {
+        min-height:58px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-weight:800;
+        color:#172B4D;
+        background:#F8FAFC;
+        border:1px solid #EAECF0;
+        box-sizing:border-box;
+    }
+    [class*="st-key-v8e_date_"] button {
+        min-height:58px !important;
+        height:58px !important;
+        border-radius:0 !important;
+        font-weight:750 !important;
+        padding:.35rem .25rem !important;
+        box-shadow:none !important;
+    }
+    [class*="st-key-v8e_date_"] button p {
+        font-size:.82rem !important;
+        line-height:1.15 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ============================================================
 # DATABASE
 # ============================================================
@@ -1875,21 +1914,34 @@ def render_week(start_date, end_date, work, meetings, others, visible_activities
         unsafe_allow_html=True,
     )
 
-    grid = []
-    # Header row
-    grid.append('<div class="schedule-head activity-head">ACTIVITY</div>')
-    for d in days:
-        is_non_working, holiday_label = holiday_info(d)
-        holiday_class = " non-working-day" if is_non_working else ""
-        title = holiday_label if holiday_label else d.strftime("%d %b %Y")
-        grid.append(
-            f'<div class="schedule-head{holiday_class}">'
-            f'<a class="date-detail-link" href="?detail_date={d.isoformat()}" target="_self" '
-            f'title="Open all activities • {html.escape(title)}">'
-            f'<div class="dow">{fmt_day(d)}</div>'
-            f'<div class="day">{d.strftime("%d %b")}</div>'
-            f'</a></div>'
+    # Native Streamlit date buttons: no browser navigation, so the current
+    # dashboard/filter state remains in place behind the dialog.
+    header_cols=st.columns([0.8]+[1]*len(days),gap=None)
+    with header_cols[0]:
+        st.markdown(
+            '<div class="v8e-activity-head">ACTIVITY</div>',
+            unsafe_allow_html=True,
         )
+
+    clicked_date=None
+    for idx,d in enumerate(days):
+        is_non_working,holiday_label=holiday_info(d)
+        title=holiday_label if holiday_label else d.strftime("%d %b %Y")
+        with header_cols[idx+1]:
+            if st.button(
+                f"{fmt_day(d).upper()} · {d.strftime('%d %b')}",
+                key=f"v8e_date_{week_no}_{d.isoformat()}",
+                help=f"Open all activities • {title}",
+                use_container_width=True,
+            ):
+                clicked_date=d
+
+    if clicked_date is not None:
+        show_date_detail(
+            clicked_date,work,meetings,others,visible_activities
+        )
+
+    grid = []
 
     lane_specs = [
         ("WORK", "work", "▣"),
@@ -2449,37 +2501,9 @@ def weekly_dashboard():
         st.session_state["dash_week"]="All"
         st.session_state["dash_calendar_initialized"]=True
 
-    # Date-detail overlay.
-    #
-    # The dashboard calendar itself is rendered as HTML, so clicking a date
-    # changes the URL query string. Treat that query string only as a one-time
-    # trigger: copy the clicked date into Session State, restore the dashboard
-    # month/year from that date, clear the URL, then rerun once. On the next
-    # run the dialog opens from Session State without resetting to today's
-    # month and it will not reopen after the user closes it.
-    detail_date_value = st.query_params.get("detail_date")
-    if detail_date_value:
-        try:
-            clicked_date = parse_date(detail_date_value)
-            st.session_state["dash_month"] = clicked_date.month
-            st.session_state["dash_year"] = clicked_date.year
-            st.session_state["dash_detail_pending"] = clicked_date.isoformat()
-        except Exception:
-            st.session_state.pop("dash_detail_pending", None)
-
-        # Do not use pop() here. Query-param mutation can itself trigger a
-        # rerun; clearing after state has been captured makes the transition
-        # deterministic.
-        st.query_params.clear()
-        st.rerun()
-
-    detail_date = None
-    pending_detail = st.session_state.pop("dash_detail_pending", None)
-    if pending_detail:
-        try:
-            detail_date = parse_date(pending_detail)
-        except Exception:
-            detail_date = None
+    # Date detail is opened by native Streamlit date buttons in render_week().
+    # This preserves the active Weekly Dashboard session instead of navigating
+    # the browser through a raw query-string link.
 
     # Calendar range is derived from data + current year; no Setup entry needed.
     conn = get_conn()
@@ -2637,15 +2661,6 @@ def weekly_dashboard():
             )
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
-
-        if detail_date is not None:
-            show_date_detail(
-                detail_date,
-                work,
-                meetings,
-                others,
-                visible_activities,
-            )
 
     selected_weeks = list(enumerate(weeks, start=1))
     if selected_week != "All":
@@ -2992,6 +3007,88 @@ def ensure_v4_input_schema():
     conn.close()
 
 
+
+_DATE_MONTH_LABELS={
+    1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
+    7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec",
+}
+
+
+def _tap_date_selector(
+    label,
+    value=None,
+    *,
+    key,
+    allow_blank=False,
+    disabled=False,
+    default_today=False,
+):
+    """Tap-only Day / Month / Year selector for touch devices.
+
+    It intentionally avoids Streamlit's editable date text field, so tapping
+    the control on iPad/iPhone does not bring up the on-screen keyboard.
+    """
+    if isinstance(value,pd.Timestamp):
+        value=value.date()
+    elif isinstance(value,datetime):
+        value=value.date()
+
+    if value is None and default_today and not allow_blank:
+        value=date.today()
+
+    today=date.today()
+    base=value if isinstance(value,date) else None
+
+    year_min=min(today.year-15,base.year if base else today.year)
+    year_max=max(today.year+15,base.year if base else today.year)
+    years=list(range(year_min,year_max+1))
+    blank="—"
+
+    day_options=([blank] if allow_blank else [])+list(range(1,32))
+    month_options=([blank] if allow_blank else [])+list(range(1,13))
+    year_options=([blank] if allow_blank else [])+years
+
+    default_day=base.day if base else (blank if allow_blank else today.day)
+    default_month=base.month if base else (blank if allow_blank else today.month)
+    default_year=base.year if base else (blank if allow_blank else today.year)
+
+    st.markdown(
+        f'<div class="v8e-date-label">{html.escape(label)}</div>',
+        unsafe_allow_html=True,
+    )
+    c1,c2,c3=st.columns([0.72,1.02,1.02],gap="small")
+    with c1:
+        selected_day=st.selectbox(
+            "Day",day_options,index=day_options.index(default_day),
+            key=f"{key}_day",disabled=disabled,label_visibility="collapsed",
+        )
+    with c2:
+        selected_month=st.selectbox(
+            "Month",month_options,index=month_options.index(default_month),
+            format_func=lambda x: blank if x==blank else _DATE_MONTH_LABELS[int(x)],
+            key=f"{key}_month",disabled=disabled,label_visibility="collapsed",
+        )
+    with c3:
+        selected_year=st.selectbox(
+            "Year",year_options,index=year_options.index(default_year),
+            key=f"{key}_year",disabled=disabled,label_visibility="collapsed",
+        )
+
+    if disabled and base is None:
+        return None
+    if allow_blank and (
+        selected_day==blank or selected_month==blank or selected_year==blank
+    ):
+        return None
+
+    try:
+        y=int(selected_year); m=int(selected_month); d=int(selected_day)
+        d=min(d,calendar.monthrange(y,m)[1])
+        return date(y,m,d)
+    except Exception:
+        return None
+
+
 def _select_or_empty(label, options, key=None, index=0, help=None):
     opts=list(options)
     if not opts:
@@ -3078,18 +3175,14 @@ def _add_team():
         st.markdown("#### Intern Period")
         d1,d2=st.columns(2)
         with d1:
-            intern_start=st.date_input(
-                "Intern Start *",
-                value=None,
-                disabled=(category!="Intern"),
-                key="v4_add_intern_start",
+            intern_start=_tap_date_selector(
+                "Intern Start *",value=None,key="v8e_add_intern_start",
+                allow_blank=True,disabled=(category!="Intern"),
             )
         with d2:
-            intern_end=st.date_input(
-                "Intern End *",
-                value=None,
-                disabled=(category!="Intern"),
-                key="v4_add_intern_end",
+            intern_end=_tap_date_selector(
+                "Intern End *",value=None,key="v8e_add_intern_end",
+                allow_blank=True,disabled=(category!="Intern"),
             )
 
         if category!="Intern":
@@ -3183,19 +3276,15 @@ def _edit_team(df):
         d1,d2=st.columns(2)
         with d1:
             sd=safe_date(row["intern_start"])
-            intern_start=st.date_input(
-                "Intern Start *",
-                value=sd,
-                disabled=(category!="Intern"),
-                key=f"v4_edit_intern_start_{rid}",
+            intern_start=_tap_date_selector(
+                "Intern Start *",value=sd,key=f"v8e_edit_intern_start_{rid}",
+                allow_blank=True,disabled=(category!="Intern"),
             )
         with d2:
             ed=safe_date(row["intern_end"])
-            intern_end=st.date_input(
-                "Intern End *",
-                value=ed,
-                disabled=(category!="Intern"),
-                key=f"v4_edit_intern_end_{rid}",
+            intern_end=_tap_date_selector(
+                "Intern End *",value=ed,key=f"v8e_edit_intern_end_{rid}",
+                allow_blank=True,disabled=(category!="Intern"),
             )
 
         if category!="Intern":
@@ -3600,8 +3689,12 @@ def _add_project():
             ptypes=master_values("project_type","project_type")
             ptype=_select_or_empty("Project Type",ptypes)
         with c2:
-            start=st.date_input("Start Date",value=None)
-            finish=st.date_input("Target Finish",value=None)
+            start=_tap_date_selector(
+                "Start Date",value=None,key="v8e_project_add_start",allow_blank=True
+            )
+            finish=_tap_date_selector(
+                "Target Finish",value=None,key="v8e_project_add_finish",allow_blank=True
+            )
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes)
         with c3:
@@ -3660,8 +3753,12 @@ def _edit_project(df):
         with c2:
             start=safe_date(row["start_date"], None)
             finish=safe_date(row["target_finish"], None)
-            start=st.date_input("Start Date",value=start)
-            finish=st.date_input("Target Finish",value=finish)
+            start=_tap_date_selector(
+                "Start Date",value=start,key=f"v8e_project_edit_start_{pid}",allow_blank=True
+            )
+            finish=_tap_date_selector(
+                "Target Finish",value=finish,key=f"v8e_project_edit_finish_{pid}",allow_blank=True
+            )
             sizes=master_values("project_size","project_size")
             size=_select_or_empty("Project Size",sizes,index=sizes.index(row["project_size"]) if row["project_size"] in sizes else 0)
         with c3:
@@ -4357,8 +4454,12 @@ def _add_work():
         c1,c2=st.columns(2)
         with c1:
             pid=st.selectbox("Project ID",pids)
-            start=st.date_input("Start Date")
-            end=st.date_input("End Date")
+            start=_tap_date_selector(
+                "Start Date",key="v8e_work_add_start",default_today=True
+            )
+            end=_tap_date_selector(
+                "End Date",key="v8e_work_add_end",default_today=True
+            )
             at=_select_or_empty("Activity Type",ats)
         with c2:
             task=st.text_input("Deliverable / Task *")
@@ -4389,7 +4490,12 @@ def _edit_work(df):
         pid=st.selectbox("Project ID",projects["id"].tolist(),index=projects["id"].tolist().index(row["project_id"]))
         sd=safe_date(row["start_date"], date.today())
         ed=safe_date(row["end_date"], sd)
-        start=st.date_input("Start Date",value=sd); end=st.date_input("End Date",value=ed)
+        start=_tap_date_selector(
+            "Start Date",value=sd,key=f"v8e_work_edit_start_{rid}"
+        )
+        end=_tap_date_selector(
+            "End Date",value=ed,key=f"v8e_work_edit_end_{rid}"
+        )
         task=st.text_input("Deliverable / Task *",value=clean(row["task"]))
         at=_select_or_empty("Activity Type",ats,index=ats.index(row["activity_type"]) if row["activity_type"] in ats else 0)
         priority=_select_or_empty("Priority",pris,index=pris.index(row["priority"]) if row["priority"] in pris else 0)
@@ -4430,7 +4536,9 @@ def _add_meeting():
     with st.form("v4_add_meeting",clear_on_submit=True):
         c1,c2=st.columns(2)
         with c1:
-            d=st.date_input("Date")
+            d=_tap_date_selector(
+                "Date",key="v8e_meeting_add_date",default_today=True
+            )
             c3,c4=st.columns(2)
             with c3: start=st.time_input("Start")
             with c4: end=st.time_input("End")
@@ -4464,7 +4572,9 @@ def _edit_meeting(df):
     types=master_values("meeting_type","meeting_type");locs=master_values("meeting_location","location")
     with st.form("v4_edit_meeting"):
         d=safe_date(row["activity_date"], date.today())
-        d=st.date_input("Date",value=d)
+        d=_tap_date_selector(
+            "Date",value=d,key=f"v8e_meeting_edit_date_{rid}"
+        )
         def parse_t(v,default):
             try:return datetime.strptime(str(v),"%H:%M").time()
             except:return default
@@ -4505,7 +4615,9 @@ def _other_df():
 def _add_other():
     sdf=_staff_options(); people=["No Specific Staff"]+(sdf["name"].tolist() if not sdf.empty else [])
     with st.form("v4_add_other",clear_on_submit=True):
-        d=st.date_input("Date")
+        d=_tap_date_selector(
+            "Date",key="v8e_other_add_date",default_today=True
+        )
         activity=st.text_input("Other Activity *")
         person=st.selectbox("Related Staff",people)
         notes=st.text_area("Notes")
@@ -4527,7 +4639,9 @@ def _edit_other(df):
     p0=row["related_staff"] or "No Specific Staff"
     with st.form("v4_edit_other"):
         d=safe_date(row["activity_date"], date.today())
-        d=st.date_input("Date",value=d)
+        d=_tap_date_selector(
+            "Date",value=d,key=f"v8e_other_edit_date_{rid}"
+        )
         activity=st.text_input("Other Activity *",value=clean(row["activity"]))
         person=st.selectbox("Related Staff",people,index=people.index(p0) if p0 in people else 0)
         notes=st.text_area("Notes",value=clean(row["notes"]))
