@@ -850,6 +850,23 @@ st.markdown(
             color-mix(in srgb, var(--st-text-color, #667085) 20%, transparent)
             !important;
     }
+
+    /* V8d Fix 3 — logo follows the actual inherited foreground color.
+       This works in both Light and Dark without Python reruns or theme tokens. */
+    .v3-brand-mark,
+    .araya-home-logo {
+        color: inherit !important;
+    }
+
+    .araya-logo-mask,
+    .v3-brand-mark .araya-logo-mask,
+    .araya-home .araya-logo-mask {
+        background-color: currentColor !important;
+        background: currentColor !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
