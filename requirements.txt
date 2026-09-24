@@ -2,3 +2,4 @@ streamlit
 pandas
 openpyxl
 psycopg[binary,pool]>=3.2
+reportlab>=4.2

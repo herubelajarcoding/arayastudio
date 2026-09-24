@@ -20,6 +20,7 @@ except ImportError:
     ConnectionPool = None
 from pathlib import Path
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 import calendar
 import html
 from io import BytesIO
@@ -27,6 +28,21 @@ import re
 
 import pandas as pd
 import streamlit as st
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+    )
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 
 # ============================================================
@@ -1641,6 +1657,204 @@ def checklist_filter(label, options, all_label, key_prefix, format_func=None):
 
 
 
+
+@st.cache_resource(show_spinner=False)
+def _pdf_font_names():
+    """Use DejaVu Sans when available for broader Unicode support."""
+    if not REPORTLAB_AVAILABLE:
+        return ("Helvetica", "Helvetica-Bold")
+
+    regular = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    bold = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+    if regular.exists() and bold.exists():
+        try:
+            if "ArayaSans" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("ArayaSans", str(regular)))
+            if "ArayaSansBold" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("ArayaSansBold", str(bold)))
+            return ("ArayaSans", "ArayaSansBold")
+        except Exception:
+            pass
+    return ("Helvetica", "Helvetica-Bold")
+
+
+def _pdf_safe(value):
+    """PDF-friendly text while avoiding problematic Unicode dash/bullet glyphs."""
+    s=clean(value)
+    s=(s.replace("•","-")
+         .replace("–","-")
+         .replace("—","-")
+         .replace("…","..."))
+    return html.escape(s).replace("\n","<br/>")
+
+
+def generate_date_detail_pdf(detail_date, work, meetings, others, visible_activities):
+    """Generate a clean A4 PDF for the selected date using current dashboard filters."""
+    if not REPORTLAB_AVAILABLE:
+        return None
+
+    regular_font,bold_font=_pdf_font_names()
+    bio=BytesIO()
+
+    doc=SimpleDocTemplate(
+        bio,
+        pagesize=A4,
+        rightMargin=15*mm,
+        leftMargin=15*mm,
+        topMargin=14*mm,
+        bottomMargin=14*mm,
+        title=f"ARAYASTD Activity Detail {detail_date.isoformat()}",
+        author="ARAYASTD Studio Control Board",
+    )
+
+    styles=getSampleStyleSheet()
+    title_style=ParagraphStyle(
+        "ArayaTitle", parent=styles["Title"],
+        fontName=bold_font, fontSize=16, leading=20,
+        textColor=colors.HexColor("#172B4D"),
+        alignment=TA_CENTER, spaceAfter=4*mm,
+    )
+    date_style=ParagraphStyle(
+        "ArayaDate", parent=styles["Normal"],
+        fontName=regular_font, fontSize=9.5, leading=13,
+        textColor=colors.HexColor("#475467"),
+        alignment=TA_CENTER, spaceAfter=6*mm,
+    )
+    section_style=ParagraphStyle(
+        "ArayaSection", parent=styles["Heading2"],
+        fontName=bold_font, fontSize=11, leading=14,
+        textColor=colors.HexColor("#172B4D"),
+        spaceAfter=2.5*mm,
+    )
+    item_style=ParagraphStyle(
+        "ArayaItem", parent=styles["BodyText"],
+        fontName=regular_font, fontSize=8.6, leading=12,
+        textColor=colors.HexColor("#1F2937"),
+        leftIndent=2*mm, spaceAfter=1.3*mm,
+    )
+    meta_style=ParagraphStyle(
+        "ArayaMeta", parent=item_style,
+        fontSize=7.8, leading=10.5,
+        textColor=colors.HexColor("#667085"),
+        leftIndent=6*mm,
+    )
+    empty_style=ParagraphStyle(
+        "ArayaEmpty", parent=item_style,
+        textColor=colors.HexColor("#98A2B3"),
+    )
+
+    story=[
+        Paragraph("ARAYASTD - Daily Activity Detail", title_style),
+        Paragraph(detail_date.strftime("%A, %d %B %Y"), date_style),
+    ]
+
+    section_colors={
+        "work": colors.HexColor("#EAF4FF"),
+        "meeting": colors.HexColor("#FFF6D8"),
+        "other": colors.HexColor("#F2E9FF"),
+    }
+
+    def section_header(label, kind):
+        t=Table(
+            [[Paragraph(label, section_style)]],
+            colWidths=[180*mm],
+            hAlign="LEFT",
+        )
+        t.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),section_colors[kind]),
+            ("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#D0D5DD")),
+            ("LEFTPADDING",(0,0),(-1,-1),3*mm),
+            ("RIGHTPADDING",(0,0),(-1,-1),3*mm),
+            ("TOPPADDING",(0,0),(-1,-1),2.2*mm),
+            ("BOTTOMPADDING",(0,0),(-1,-1),1.2*mm),
+        ]))
+        story.append(t)
+        story.append(Spacer(1,2.2*mm))
+
+    # WORK
+    if "work" in visible_activities:
+        section_header("WORK", "work")
+        wrows=work[work["end_date"]==detail_date.isoformat()].copy() if not work.empty else work.iloc[0:0]
+        if wrows.empty:
+            story.append(Paragraph("No work activity.", empty_style))
+        else:
+            groups={}
+            for _,row in wrows.iterrows():
+                groups.setdefault(clean(row.get("project_id")),[]).append(row)
+            for pid,rows in sorted(groups.items(),key=lambda x:(x[0]=="",x[0])):
+                pname=clean(rows[0].get("project_name"))
+                story.append(Paragraph(
+                    f"<b>{_pdf_safe(pid)} | {_pdf_safe(pname)}</b>", item_style
+                ))
+                for row in sorted(rows,key=lambda r:(priority_rank(r.get("priority")),clean(r.get("task")).lower(),int(r.get("id") or 0))):
+                    task=_pdf_safe(row.get("task"))
+                    pic=_pdf_safe(row.get("pic"))
+                    priority=_pdf_safe(row.get("priority"))
+                    atype=_pdf_safe(row.get("activity_type"))
+                    story.append(Paragraph(f"- {task}", item_style))
+                    meta=[]
+                    if pic: meta.append(f"PIC: {pic.upper()}")
+                    if atype: meta.append(f"Type: {atype}")
+                    if priority: meta.append(f"Priority: {priority.upper()}")
+                    if meta:
+                        story.append(Paragraph(" | ".join(meta), meta_style))
+        story.append(Spacer(1,4*mm))
+
+    # MEETINGS
+    if "meeting" in visible_activities:
+        section_header("MEETINGS", "meeting")
+        mrows=meetings[meetings["activity_date"]==detail_date.isoformat()].copy() if not meetings.empty else meetings.iloc[0:0]
+        if mrows.empty:
+            story.append(Paragraph("No meeting activity.", empty_style))
+        else:
+            for _,row in mrows.sort_values(["start_time","id"],na_position="last").iterrows():
+                mtype=_pdf_safe(row.get("meeting_type"))
+                story.append(Paragraph(f"- {mtype}", item_style))
+                attendees=[
+                    _pdf_safe(row.get("attendee_1")),
+                    _pdf_safe(row.get("attendee_2")),
+                    _pdf_safe(row.get("attendee_3")),
+                    _pdf_safe(row.get("attendee_4")),
+                ]
+                attendees=", ".join([x for x in attendees if x])
+                meta=[]
+                start=_pdf_safe(row.get("start_time"))
+                end=_pdf_safe(row.get("end_time"))
+                location=_pdf_safe(row.get("location"))
+                project_id=_pdf_safe(row.get("project_id"))
+                project_name=_pdf_safe(row.get("project_name"))
+                agenda=_pdf_safe(row.get("agenda_notes"))
+                if project_id or project_name: meta.append(f"Project: {project_id} | {project_name}")
+                if start or end: meta.append(f"Time: {start} - {end}")
+                if attendees: meta.append(f"Attendees: {attendees}")
+                if location: meta.append(f"Location: {location}")
+                if agenda: meta.append(f"Notes: {agenda}")
+                for line in meta:
+                    story.append(Paragraph(line, meta_style))
+        story.append(Spacer(1,4*mm))
+
+    # OTHER
+    if "other" in visible_activities:
+        section_header("OTHER ACTIVITIES", "other")
+        orows=others[others["activity_date"]==detail_date.isoformat()].copy() if not others.empty else others.iloc[0:0]
+        if orows.empty:
+            story.append(Paragraph("No other activity.", empty_style))
+        else:
+            for _,row in orows.sort_values(["activity","id"],na_position="last").iterrows():
+                activity=_pdf_safe(row.get("activity"))
+                story.append(Paragraph(f"- {activity}", item_style))
+                staff=_pdf_safe(row.get("related_staff"))
+                notes=_pdf_safe(row.get("notes"))
+                if staff:
+                    story.append(Paragraph(f"Related Staff: {staff.upper()}", meta_style))
+                if notes:
+                    story.append(Paragraph(f"Notes: {notes}", meta_style))
+
+    doc.build(story)
+    bio.seek(0)
+    return bio.getvalue()
+
+
 @st.dialog("Activity Detail", width="large")
 def show_date_detail(detail_date, work, meetings, others, visible_activities):
     """Full-detail modal for one date. No dashboard display limits.
@@ -1652,6 +1866,21 @@ def show_date_detail(detail_date, work, meetings, others, visible_activities):
         f'<div class="detail-date">{detail_date.strftime("%A, %d %B %Y")}</div>',
         unsafe_allow_html=True,
     )
+
+    if REPORTLAB_AVAILABLE:
+        pdf_bytes=generate_date_detail_pdf(
+            detail_date,work,meetings,others,visible_activities
+        )
+        st.download_button(
+            "Generate PDF",
+            data=pdf_bytes,
+            file_name=f"ARAYASTD_Activity_Detail_{detail_date.isoformat()}.pdf",
+            mime="application/pdf",
+            key=f"detail_pdf_{detail_date.isoformat()}",
+            use_container_width=True,
+        )
+    else:
+        st.caption("PDF generator belum tersedia. Pastikan reportlab terpasang.")
 
     def priority_class(value):
         p = clean(value).lower()
@@ -1873,6 +2102,16 @@ def weekly_dashboard():
     projects = get_projects()
     project_options = (["All"] + projects["id"].tolist()) if not projects.empty else ["All"]
 
+    # First dashboard load in a Streamlit session always opens the actual
+    # current month/year in Indonesia (WIB). User selections remain persistent
+    # after that, including when opening a date-detail dialog.
+    dashboard_today=datetime.now(ZoneInfo("Asia/Jakarta")).date()
+    if not st.session_state.get("dash_calendar_initialized"):
+        st.session_state["dash_month"]=dashboard_today.month
+        st.session_state["dash_year"]=dashboard_today.year
+        st.session_state["dash_week"]="All"
+        st.session_state["dash_calendar_initialized"]=True
+
     # Date-detail overlay.
     #
     # The dashboard calendar itself is rendered as HTML, so clicking a date
@@ -1919,7 +2158,7 @@ def weekly_dashboard():
         date_values.extend([r[0] for r in rows if r[0]])
     conn.close()
 
-    years = {date.today().year}
+    years = {dashboard_today.year}
     for value in date_values:
         try:
             years.add(parse_date(value).year)
@@ -1948,11 +2187,11 @@ def weekly_dashboard():
         c1, c2, c3, c4, c5 = st.columns([1.05, .82, 1.55, 1.15, 1.15], gap="small")
         with c1:
             selected_month_no = st.selectbox(
-                "MONTH", range(1, 13), index=date.today().month - 1,
+                "MONTH", range(1, 13), index=dashboard_today.month - 1,
                 format_func=lambda x: f"📅  {month_names[x - 1]}", key="dash_month"
             )
         with c2:
-            default_year_index = years.index(date.today().year) if date.today().year in years else len(years) - 1
+            default_year_index = years.index(dashboard_today.year) if dashboard_today.year in years else len(years) - 1
             selected_year = st.selectbox("YEAR", years, index=default_year_index,
                                          format_func=lambda x: f"📅  {x}", key="dash_year")
 
@@ -1975,6 +2214,8 @@ def weekly_dashboard():
                 f"Week {i+1} ({w[0].strftime('%d')}–{w[1].strftime('%d %b')})"
                 for i, w in enumerate(weeks)
             ]
+            if st.session_state.get("dash_week") not in week_options:
+                st.session_state["dash_week"]="All"
             selected_week = st.selectbox("WEEK", week_options, key="dash_week")
         with c5:
             selected_activity, activity_all = checklist_filter(
@@ -2005,14 +2246,35 @@ def weekly_dashboard():
             meetings = meetings[meetings["project_id"].isin(selected_projects)].copy()
             # Other intentionally remains independent of project filter.
 
-        # KPI strip — visual only; values and filter logic are unchanged.
-        work_count = len(work) if "work" in visible_activities else 0
-        meeting_count = len(meetings) if "meeting" in visible_activities else 0
-        submission_count = (
-            int((work["activity_type"].str.lower() == "submission").sum())
-            if "work" in visible_activities and not work.empty else 0
+        # KPI cards follow all dashboard filters above:
+        # Month/Year, Project, Week and Activity.
+        kpi_work=work.copy()
+        kpi_meetings=meetings.copy()
+        kpi_others=others.copy()
+
+        if selected_week != "All":
+            kpi_idx=int(selected_week.split()[1])
+            kpi_start,kpi_end=weeks[kpi_idx-1]
+            kpi_work=kpi_work[
+                (kpi_work["end_date"] >= kpi_start.isoformat())
+                & (kpi_work["end_date"] <= kpi_end.isoformat())
+            ].copy()
+            kpi_meetings=kpi_meetings[
+                (kpi_meetings["activity_date"] >= kpi_start.isoformat())
+                & (kpi_meetings["activity_date"] <= kpi_end.isoformat())
+            ].copy()
+            kpi_others=kpi_others[
+                (kpi_others["activity_date"] >= kpi_start.isoformat())
+                & (kpi_others["activity_date"] <= kpi_end.isoformat())
+            ].copy()
+
+        work_count=len(kpi_work) if "work" in visible_activities else 0
+        meeting_count=len(kpi_meetings) if "meeting" in visible_activities else 0
+        submission_count=(
+            int((kpi_work["activity_type"].str.lower()=="submission").sum())
+            if "work" in visible_activities and not kpi_work.empty else 0
         )
-        other_count = len(others) if "other" in visible_activities else 0
+        other_count=len(kpi_others) if "other" in visible_activities else 0
 
         icon_work = '''<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M15 2v4h4"/><path d="M9 11h6M9 15h6M9 19h4"/></svg>'''
         icon_meeting = '''<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="4"/><circle cx="17" cy="9" r="3"/><path d="M2.5 21c.3-4 2.6-6 6.5-6s6.2 2 6.5 6z"/><path d="M14.5 15.5c3.2.1 5 1.8 5.5 4.5h-4.2c-.2-1.7-.6-3.1-1.3-4.5z"/></svg>'''
@@ -4292,6 +4554,13 @@ if st.sidebar.button(
 ):
     st.session_state.v3a_module = "Dashboard"
     st.session_state.v3a_dashboard_submodule = "Weekly Dashboard"
+    # Opening Weekly Dashboard from the sidebar starts from the actual
+    # current month/year; users can then browse other periods normally.
+    _dash_today=datetime.now(ZoneInfo("Asia/Jakarta")).date()
+    st.session_state["dash_month"]=_dash_today.month
+    st.session_state["dash_year"]=_dash_today.year
+    st.session_state["dash_week"]="All"
+    st.session_state["dash_calendar_initialized"]=True
     st.rerun()
 
 # ------------------------------------------------------------
