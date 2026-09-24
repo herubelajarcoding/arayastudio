@@ -111,14 +111,14 @@ st.markdown(
     div[data-testid="stHorizontalBlock"] .stPopover > button {
         min-height:42px !important;
         border-radius:9px !important;
-        border:1px solid #E2E8F0 !important;
-        background:#F5F8FC !important;
+        border:1px solid color-mix(in srgb, var(--text-color, #172B4D) 18%, transparent) !important;
+        background:var(--secondary-background-color, #F5F8FC) !important;
         box-shadow:none !important;
     }
     div[data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover,
     div[data-testid="stHorizontalBlock"] .stPopover > button:hover {
-        border-color:#B8C7DA !important;
-        background:#F0F5FA !important;
+        border-color:color-mix(in srgb, var(--text-color, #172B4D) 34%, transparent) !important;
+        background:color-mix(in srgb, var(--secondary-background-color, #F0F5FA) 88%, var(--text-color, #172B4D) 12%) !important;
     }
     div[data-testid="stHorizontalBlock"] .stSelectbox [data-baseweb="select"] > div {
         min-height:42px !important;
@@ -129,21 +129,22 @@ st.markdown(
         width:100% !important;
         min-height:42px !important;
         justify-content:flex-start !important;
-        color:#172B4D !important;
+        color:var(--text-color, #172B4D) !important;
         font-weight:600 !important;
         padding:0 .8rem !important;
         border-radius:9px !important;
-        border:1px solid #E2E8F0 !important;
-        background:#F5F8FC !important;
+        border:1px solid color-mix(in srgb, var(--text-color, #172B4D) 18%, transparent) !important;
+        background:var(--secondary-background-color, #F5F8FC) !important;
         box-shadow:none !important;
     }
     div[data-testid="stHorizontalBlock"] .stPopover > button p {
         font-size:.83rem !important;
         font-weight:600 !important;
-        color:#172B4D !important;
+        color:var(--text-color, #172B4D) !important;
     }
     .filter-label {
-        font-size:.74rem; font-weight:700; color:#475467;
+        font-size:.74rem; font-weight:700; color:var(--text-color, #475467);
+        opacity:.72;
         margin:0 0 .28rem .05rem; letter-spacing:.02em;
         height:1.18rem !important;
         line-height:1.18rem !important;
@@ -163,7 +164,7 @@ st.markdown(
         min-height:42px !important;
         box-sizing:border-box !important;
     }
-    .filter-value {font-size:.83rem;color:#172B4D;font-weight:600;}
+    .filter-value {font-size:.83rem;color:var(--text-color, #172B4D);font-weight:600;}
     .app-title {display:block; font-size:2rem; line-height:1.3; font-weight:750; margin:0 0 0.1rem 0; padding-top:1.35rem; padding-bottom:.05rem; overflow:visible !important; height:auto !important; min-height:2.6rem;}
     /* ========================================================
        V3A STATIC SIDEBAR TREE
@@ -177,7 +178,7 @@ st.markdown(
         gap:.72rem;
         padding:.35rem .15rem 1.05rem;
         margin-bottom:.25rem;
-        border-bottom:1px solid #E4E7EC;
+        border-bottom:1px solid color-mix(in srgb, var(--text-color, #172B4D) 16%, transparent);
     }
     .v3-brand-mark {
         width:42px;
@@ -189,11 +190,18 @@ st.markdown(
         background:transparent;
         overflow:hidden;
     }
-    .v3-brand-mark img {
+    .araya-logo-mask {
         display:block;
         width:100%;
         height:100%;
-        object-fit:contain;
+        background-color:var(--text-color, #111111);
+        -webkit-mask-repeat:no-repeat;
+        mask-repeat:no-repeat;
+        -webkit-mask-position:center;
+        mask-position:center;
+        -webkit-mask-size:contain;
+        mask-size:contain;
+        transition:background-color .18s ease;
     }
 
     /* V8b — minimalist architectural landing page */
@@ -210,19 +218,19 @@ st.markdown(
     }
     .araya-home-logo {
         width:clamp(110px,15vw,180px);
-        height:auto;
+        height:clamp(105px,14vw,170px);
         display:block;
         margin:0 auto 2.2rem;
     }
     .araya-home-rule {
         width:54px;
         height:1px;
-        background:#111111;
+        background:var(--text-color, #111111);
         margin:0 auto 1.7rem;
     }
     .araya-home-title {
         margin:0;
-        color:#111111;
+        color:var(--text-color, #111111);
         font-size:clamp(2.2rem,5vw,4.8rem);
         line-height:1;
         font-weight:500;
@@ -239,18 +247,20 @@ st.markdown(
         }
     }
     .v3-brand-name {
-        color:#172B4D;
+        color:var(--text-color, #172B4D);
         font-size:1.08rem;
         font-weight:850;
         letter-spacing:.02em;
     }
     .v3-brand-sub {
-        color:#667085;
+        color:var(--text-color, #667085);
+        opacity:.62;
         font-size:.70rem;
         margin-top:.12rem;
     }
     .v3-nav-label {
-        color:#98A2B3;
+        color:var(--text-color, #98A2B3);
+        opacity:.52;
         font-size:.68rem;
         font-weight:800;
         letter-spacing:.08em;
@@ -259,7 +269,7 @@ st.markdown(
 
     /* Module = section heading, not another clickable menu. */
     .v3-module-heading {
-        color:#172B4D;
+        color:var(--text-color, #172B4D);
         font-size:1.02rem;
         font-weight:800;
         line-height:1.25;
@@ -281,7 +291,7 @@ st.markdown(
     section[data-testid="stSidebar"] .stButton > button:hover {
         background:#F2F4F7;
     }
-    .app-subtitle {color:#667085; margin-bottom:1rem;}
+    .app-subtitle {color:var(--text-color, #667085); opacity:.68; margin-bottom:1rem;}
     .week-title {
         font-size: 1.12rem; font-weight: 800; padding: 0.7rem 0.9rem;
         border-radius: 8px; background: #EEF2F6; margin-top: 0.75rem;
@@ -595,6 +605,61 @@ st.markdown(
     .stTabs [data-baseweb="tab-list"] > div { flex-wrap: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab"] { flex: 0 0 auto !important; white-space: nowrap !important; min-width: max-content !important; }
     .stTabs [data-baseweb="tab-list"] {gap: 1.25rem;}
+
+    /* ========================================================
+       V8c — THEME / DARK MODE COMPATIBILITY
+       ======================================================== */
+    .stTextInput input,
+    .stNumberInput input,
+    .stDateInput input,
+    .stTimeInput input,
+    .stTextArea textarea {
+        color:var(--text-color, #111827) !important;
+        background-color:var(--secondary-background-color, #F5F8FC) !important;
+        caret-color:var(--text-color, #111827) !important;
+    }
+
+    .stTextInput input::placeholder,
+    .stNumberInput input::placeholder,
+    .stDateInput input::placeholder,
+    .stTimeInput input::placeholder,
+    .stTextArea textarea::placeholder {
+        color:var(--text-color, #667085) !important;
+        opacity:.48 !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] > div,
+    .stMultiSelect [data-baseweb="select"] > div {
+        color:var(--text-color, #111827) !important;
+        background-color:var(--secondary-background-color, #F5F8FC) !important;
+        border-color:color-mix(in srgb, var(--text-color, #111827) 18%, transparent) !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] *,
+    .stMultiSelect [data-baseweb="select"] * {
+        color:var(--text-color, #111827) !important;
+    }
+
+    .stSelectbox svg,
+    .stMultiSelect svg,
+    .stDateInput svg,
+    .stTimeInput svg {
+        color:var(--text-color, #111827) !important;
+        fill:currentColor !important;
+    }
+
+    /* Labels and ordinary app-shell text follow the active Streamlit theme. */
+    .app-title,
+    section[data-testid="stSidebar"] {
+        color:var(--text-color, #111827) !important;
+    }
+
+    /* Keep neutral structural surfaces from becoming bright white in dark mode. */
+    [data-testid="stExpander"] details,
+    [data-testid="stForm"] {
+        border-color:color-mix(in srgb, var(--text-color, #111827) 16%, transparent) !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2153,7 +2218,7 @@ def beranda_page():
         f"""
         <div class="araya-home">
             <div class="araya-home-inner">
-                <img class="araya-home-logo" src="{ARAYA_LOGO_DATA_URI}" alt="Araya Studio logo">
+                <div class="araya-home-logo araya-logo-mask" style="-webkit-mask-image:url({ARAYA_LOGO_DATA_URI});mask-image:url({ARAYA_LOGO_DATA_URI});"></div>
                 <div class="araya-home-rule"></div>
                 <div class="araya-home-title">ARAYA STUDIO</div>
             </div>
@@ -4585,7 +4650,7 @@ if "v3b_setup_submodule" not in st.session_state:
 
 st.sidebar.markdown(
     f'<div class="v3-brand">'
-    f'<div class="v3-brand-mark"><img src="{ARAYA_LOGO_DATA_URI}" alt="Araya logo"></div>'
+    f'<div class="v3-brand-mark"><span class="araya-logo-mask" style="-webkit-mask-image:url({ARAYA_LOGO_DATA_URI});mask-image:url({ARAYA_LOGO_DATA_URI});"></span></div>'
     f'<div><div class="v3-brand-name">ARAYASTD</div>'
     f'<div class="v3-brand-sub">Studio Control Board</div></div>'
     f'</div>',
